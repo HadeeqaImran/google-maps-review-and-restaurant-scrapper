@@ -97,15 +97,21 @@ Handles restaurant extraction from Google Maps search results.
 **Features:**
 - Results pane detection
 - Infinite scroll handling
-- Restaurant data extraction
+- Enhanced restaurant data extraction (name, star rating, review count, URL)
 - Progress reporting
 - Stop signal handling
 
 **Key Methods:**
 - `scrape()` - Main scraping function
 - `scrollToLoadAll(pane)` - Handles infinite scrolling
-- `extractRestaurants(pane)` - Extracts restaurant data
-- `downloadRestaurantsCSV(restaurants)` - Generates and downloads CSV
+- `extractRestaurants(pane)` - Extracts restaurant data with ratings and review counts
+- `downloadRestaurantsCSV(restaurants)` - Generates and downloads enhanced CSV
+
+**CSV Output Format:**
+- Name: Restaurant name
+- Star Rating: Average star rating (e.g., "4.5" or "N/A")
+- Number of Reviews: Total review count (e.g., "123" or "N/A")
+- Link: Google Maps URL
 
 ### 6. **Review Scraper Module** (`js/scrapers/review-scraper.js`)
 Handles review extraction from restaurant pages.
@@ -164,11 +170,15 @@ UI validates Google Maps search page
   ↓
 Chrome utils executes restaurant scraper
   ↓
+Restaurant scraper scrolls and loads all results
+  ↓
+Extracts name, star rating, review count, and URL for each restaurant
+  ↓
 Restaurant scraper sends progress updates
   ↓
 UI updates progress bar in real-time
   ↓
-Results downloaded as CSV
+Enhanced CSV downloaded with 4 columns
 ```
 
 ### 3. **Review Scraping Flow**

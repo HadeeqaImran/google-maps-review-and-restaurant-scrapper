@@ -362,19 +362,99 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
     }
   }
 
-  // Collect restaurant links
+  // Enhanced restaurant data extraction
   const anchors = pane.querySelectorAll('a.hfpxzc[href*="/maps/place/"]');
   const restaurants = new Map();
   
   for (const anchor of anchors) {
     const url = anchor.href.split("&")[0];
     const name = anchor.getAttribute("aria-label")?.trim();
+    
     if (name && url && !restaurants.has(url)) {
-      restaurants.set(url, name.replace(/,/g, " "));
+      // Extract additional restaurant data
+      const restaurantContainer = anchor.closest('[data-result-index]') || anchor.closest('.Nv2PK') || anchor.parentElement;
+      
+      // Extract star rating
+      let starRating = '';
+      const starSelectors = [
+        'span[role="img"][aria-label*="star"]',
+        '.MW4etd',
+        '.fontBodyMedium > span[aria-label*="star"]',
+        '[data-value="Rating"]'
+      ];
+      
+      for (const selector of starSelectors) {
+        const starElement = restaurantContainer?.querySelector(selector);
+        if (starElement) {
+          const ariaLabel = starElement.getAttribute('aria-label') || '';
+          const textContent = starElement.textContent || '';
+          
+          // Try to extract rating from aria-label (e.g., "4.5 stars")
+          const ratingMatch = ariaLabel.match(/(\d+\.?\d*)\s*star/i) || textContent.match(/(\d+\.?\d*)/);
+          if (ratingMatch) {
+            starRating = ratingMatch[1];
+            break;
+          }
+        }
+      }
+      
+      // Extract review count
+      let reviewCount = '';
+      const reviewSelectors = [
+        'span[aria-label*="review"]',
+        '.UY7F9',
+        '.fontBodyMedium > span:last-child',
+        'span:contains("(")',
+        '[data-value="Review count"]'
+      ];
+      
+      for (const selector of reviewSelectors) {
+        const reviewElement = restaurantContainer?.querySelector(selector);
+        if (reviewElement) {
+          const text = reviewElement.textContent || reviewElement.getAttribute('aria-label') || '';
+          
+          // Extract number from text like "(123)" or "123 reviews"
+          const countMatch = text.match(/\((\d+(?:,\d+)*)\)|(\d+(?:,\d+)*)\s*review/i);
+          if (countMatch) {
+            reviewCount = countMatch[1] || countMatch[2];
+            reviewCount = reviewCount.replace(/,/g, ''); // Remove commas
+            break;
+          }
+        }
+      }
+      
+      // If we couldn't find review count in container, try nearby text nodes
+      if (!reviewCount && restaurantContainer) {
+        const textNodes = [];
+        const walker = document.createTreeWalker(
+          restaurantContainer,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+          const text = node.textContent.trim();
+          if (text && text.match(/\(\d+\)/)) {
+            const match = text.match(/\((\d+(?:,\d+)*)\)/);
+            if (match) {
+              reviewCount = match[1].replace(/,/g, '');
+              break;
+            }
+          }
+        }
+      }
+      
+      restaurants.set(url, {
+        name: name.replace(/,/g, " "),
+        starRating: starRating || 'N/A',
+        reviewCount: reviewCount || 'N/A'
+      });
     }
   }
 
-  console.log(`🎯 Found ${restaurants.size} unique restaurants`);
+  console.log(`🎯 Found ${restaurants.size} unique restaurants with ratings and reviews`);
   
   // Clean up message listener
   if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -405,13 +485,18 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
     return;
   }
 
-  // Generate and download CSV
-  const rows = Array.from(restaurants.entries()).map(([url, name]) => [name, url]);
-  const header = '"Name","Link"';
-  const csv = [header, ...rows.map(([n,u]) => `"${n}","${u}"`)].join("\n");
+  // Generate and download enhanced CSV
+  const rows = Array.from(restaurants.entries()).map(([url, data]) => [
+    data.name, 
+    data.starRating, 
+    data.reviewCount, 
+    url
+  ]);
+  const header = '"Name","Star Rating","Number of Reviews","Link"';
+  const csv = [header, ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join("\n");
   
   downloadCSV(csv, "restaurants.csv");
-  console.log(`Downloaded CSV with ${restaurants.size} restaurants`);
+  console.log(`Downloaded CSV with ${restaurants.size} restaurants including ratings and reviews`);
 
   // Send completion message
   if (typeof chrome !== 'undefined' && chrome.runtime) {
