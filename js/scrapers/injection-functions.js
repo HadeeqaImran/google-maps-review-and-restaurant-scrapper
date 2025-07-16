@@ -729,11 +729,13 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
 
   // Generate and download CSV
   const csv = generateReviewCSV(reviews);
-  const filename = `${sanitizeFilename(restaurantName)}_reviews.csv`;
+  const filename = (restaurantName && restaurantName !== 'Unknown Restaurant') 
+    ? `${sanitizeFilename(restaurantName)}_reviews.csv` 
+    : 'reviews.csv';
   downloadCSV(csv, filename);
 
   console.log(`✅ Downloaded ${reviews.length} reviews`);
-  window.lastCsv = { csv, length: reviews.length };
+  window.lastCsv = { csv, length: reviews.length, filename };
 
   // Send completion message
   if (typeof chrome !== 'undefined' && chrome.runtime) {

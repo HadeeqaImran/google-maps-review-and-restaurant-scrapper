@@ -291,11 +291,13 @@ export class ReviewScraper {
   // Generate and download review CSV
   downloadReviewsCSV(reviews, restaurantName) {
     const csv = generateCSV(['Restaurant', 'Reviewer', 'Stars', 'Review'], reviews);
-    const filename = `${sanitizeFilename(restaurantName)}_reviews.csv`;
+    const filename = (restaurantName && restaurantName !== 'Unknown Restaurant') 
+      ? `${sanitizeFilename(restaurantName)}_reviews.csv` 
+      : 'reviews.csv';
     downloadCSV(csv, filename);
     
     log(`Downloaded ${reviews.length} reviews`, 'success');
-    window.lastCsv = { csv, length: reviews.length };
+    window.lastCsv = { csv, length: reviews.length, filename };
   }
 
   // Main scraping function

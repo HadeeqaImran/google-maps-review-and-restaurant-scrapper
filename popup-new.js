@@ -210,7 +210,7 @@ class RestaurantScraperApp {
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;
-      a.download = "restaurant_reviews.csv";
+      a.download = window.lastCsv.filename || "reviews.csv";
       a.click();
       URL.revokeObjectURL(dlUrl);
       this.ui.setStatus(`Downloaded ${window.lastCsv.length} reviews`, 'success');

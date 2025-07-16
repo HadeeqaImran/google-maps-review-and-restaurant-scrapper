@@ -261,7 +261,7 @@ pause.addEventListener('click', () => {
     const dlUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = dlUrl;
-    a.download = "restaurant_reviews.csv";
+    a.download = window.lastCsv.filename || "reviews.csv";
     a.click();
     URL.revokeObjectURL(dlUrl);
     setStatus(`Downloaded ${window.lastCsv.length} reviews`, 'success');
@@ -1001,11 +1001,13 @@ async function scrapeReviewsOptimized(userConfig = {}) {
 
   // Generate and download CSV
   const csv = generateReviewCSV(reviews);
-  const filename = `${sanitizeFilename(restaurantName)}_reviews.csv`;
+  const filename = (restaurantName && restaurantName !== 'Unknown Restaurant') 
+    ? `${sanitizeFilename(restaurantName)}_reviews.csv` 
+    : 'reviews.csv';
   downloadCSV(csv, filename);
 
   console.log(`Downloaded ${reviews.length} reviews`);
-  window.lastCsv = { csv, length: reviews.length };
+  window.lastCsv = { csv, length: reviews.length, filename };
 
   // Send completion message
   if (typeof chrome !== 'undefined' && chrome.runtime) {
