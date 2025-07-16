@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "GMaps Restaurant Scraper Pro",
+  "version": "2.0",
+  "description": "High-performance restaurant and review scraper for Google Maps with smart scrolling, progress tracking, and batch processing",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage"
+  ],
+  "action": {
+    "default_title": "Extract Restaurants & Reviews",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "logo16.png",
+      "48": "logo48.png",
+      "128": "logo128.png"
+    }
+  },
+  "host_permissions": [
+    "https://www.google.co.jp/maps/*",
+    "https://www.google.com/maps/*",
+    "https://maps.google.com/*",
+    "https://maps.google.co.jp/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
