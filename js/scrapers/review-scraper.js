@@ -350,8 +350,16 @@ export class ReviewScraper {
       // Send initial progress
       this.sendProgress(0, this.config.MAX_REVIEWS, 'Scrolling to load reviews');
 
-      while (true && !this.shouldStop) {
+      while (totalScrolls < 100 && !this.shouldStop) {
         totalScrolls++;
+        
+        const currentReviewCount = this.countUniqueReviews(pane);
+        
+        // Check if we've reached the exact target
+        if (currentReviewCount >= this.config.MAX_REVIEWS) {
+          log(`🎯 Target reached: ${currentReviewCount}/${this.config.MAX_REVIEWS} reviews`, 'success');
+          break;
+        }
         
         performScroll(scrollableElement);
         await wait(this.config.SCROLL_TIMEOUT);
@@ -362,33 +370,28 @@ export class ReviewScraper {
           break;
         }
 
-        const currentReviewCount = this.countUniqueReviews(pane);
+        const newReviewCount = this.countUniqueReviews(pane);
         
-        if (currentReviewCount > lastReviewCount) {
-          const newReviews = currentReviewCount - lastReviewCount;
-          log(`${newReviews} new reviews (total: ${currentReviewCount})`, 'success');
-          lastReviewCount = currentReviewCount;
+        if (newReviewCount > lastReviewCount) {
+          const newReviews = newReviewCount - lastReviewCount;
+          log(`${newReviews} new reviews (total: ${newReviewCount}/${this.config.MAX_REVIEWS})`, 'success');
+          lastReviewCount = newReviewCount;
           noChangeCount = 0;
 
           // Send progress update
-          this.sendProgress(currentReviewCount, this.config.MAX_REVIEWS, 'Loading reviews');
+          this.sendProgress(newReviewCount, this.config.MAX_REVIEWS, 'Loading reviews');
 
           // Wait for DOM stabilization
           await wait(1000);
         } else {
           noChangeCount++;
-          log(`No new reviews (${noChangeCount}/${this.config.NO_CHANGE_LIMIT})`, 'warn');
-        }
-
-        // Exit conditions
-        if (currentReviewCount >= this.config.MAX_REVIEWS) {
-          log(`Max reviews reached: ${this.config.MAX_REVIEWS}`, 'success');
-          break;
-        }
-
-        if (noChangeCount >= this.config.NO_CHANGE_LIMIT) {
-          log("No new content detected, stopping", 'success');
-          break;
+          log(`No new reviews (${noChangeCount}) - Found: ${newReviewCount}/${this.config.MAX_REVIEWS}`, 'warn');
+          
+          // Only stop due to no changes if we've tried many times AND found a reasonable number
+          if (noChangeCount >= Math.max(this.config.NO_CHANGE_LIMIT * 2, 20) && newReviewCount > this.config.MAX_REVIEWS * 0.8) {
+            log("🏁 Stopping: too many attempts without changes and found substantial results", 'info');
+            break;
+          }
         }
       }
 

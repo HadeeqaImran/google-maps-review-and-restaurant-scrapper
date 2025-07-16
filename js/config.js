@@ -12,7 +12,7 @@ export class Config {
       // Restaurant settings
       MAX_RESTAURANTS: 2000,
       RESTAURANT_SCROLL_TIMEOUT: 800,
-      MAX_SCROLL_ATTEMPTS: 10,
+      MAX_SCROLL_ATTEMPTS: 50,
       RESTAURANT_SCROLL_DELAY: 600,
       MAX_NO_CHANGE: 3
     };
@@ -73,7 +73,7 @@ export class Config {
       // Restaurant settings
       MAX_RESTAURANTS: 2000,
       RESTAURANT_SCROLL_TIMEOUT: 800,
-      MAX_SCROLL_ATTEMPTS: 10,
+      MAX_SCROLL_ATTEMPTS: 50,
       RESTAURANT_SCROLL_DELAY: 600,
       MAX_NO_CHANGE: 3
     };

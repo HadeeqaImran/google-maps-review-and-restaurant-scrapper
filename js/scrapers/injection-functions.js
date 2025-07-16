@@ -67,12 +67,27 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
   }
 
   // Enhanced scrolling loop with configurable limits
-  while (noChangeCount < CONFIG.MAX_NO_CHANGE && scrollAttempts < CONFIG.MAX_SCROLL_ATTEMPTS && !shouldStop) {
+  while (scrollAttempts < CONFIG.MAX_SCROLL_ATTEMPTS && !shouldStop) {
     scrollAttempts++;
+    
+    // Count current restaurants
+    const currentRestaurants = pane.querySelectorAll('a.hfpxzc[href*="/maps/place/"]').length;
+    
+    // Check if we've reached the exact target
+    if (currentRestaurants >= CONFIG.MAX_RESTAURANTS) {
+      console.log(`🎯 Target reached: ${currentRestaurants}/${CONFIG.MAX_RESTAURANTS} restaurants`);
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage({
+          type: 'RESTAURANT_PROGRESS',
+          data: { phase: 'Target reached', count: currentRestaurants }
+        });
+      }
+      break;
+    }
     
     // Scroll to bottom
     pane.scrollTo(0, pane.scrollHeight);
-    console.log(`Scroll attempt ${scrollAttempts}/${CONFIG.MAX_SCROLL_ATTEMPTS} (height: ${lastHeight})`);
+    console.log(`Scroll attempt ${scrollAttempts}/${CONFIG.MAX_SCROLL_ATTEMPTS} - Found: ${currentRestaurants}/${CONFIG.MAX_RESTAURANTS}`);
     
     // Wait for content to load
     await wait(CONFIG.SCROLL_DELAY);
@@ -89,21 +104,6 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
       lastHeight = newHeight;
       noChangeCount = 0;
       
-      // Count current restaurants and send progress
-      const currentRestaurants = pane.querySelectorAll('a.hfpxzc[href*="/maps/place/"]').length;
-      
-      // Check if we've reached the maximum restaurants limit
-      if (currentRestaurants >= CONFIG.MAX_RESTAURANTS) {
-        console.log(`Maximum restaurants limit reached: ${CONFIG.MAX_RESTAURANTS}`);
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          chrome.runtime.sendMessage({
-            type: 'RESTAURANT_PROGRESS',
-            data: { phase: 'Maximum restaurants reached', count: currentRestaurants }
-          });
-        }
-        break;
-      }
-      
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage({
           type: 'RESTAURANT_PROGRESS',
@@ -115,12 +115,18 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
       await wait(1000);
     } else {
       noChangeCount++;
-      console.log(`No height change (${noChangeCount}/${CONFIG.MAX_NO_CHANGE})`);
+      console.log(`⏸️ No height change (${noChangeCount})`);
+      
+      // Only stop due to no changes if we've tried many times AND found a reasonable number
+      if (noChangeCount >= Math.max(CONFIG.MAX_NO_CHANGE * 3, 15) && currentRestaurants > CONFIG.MAX_RESTAURANTS * 0.8) {
+        console.log("🏁 Stopping: too many attempts without changes and found substantial results");
+        break;
+      }
     }
 
     // Check for end banner
     if (pane.querySelector('.HlvSq')) {
-      console.log("End banner detected");
+      console.log("🏁 End banner detected - no more content available");
       break;
     }
   }
@@ -631,8 +637,16 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
     });
   }
 
-  while (true && !shouldStop) {
+  while (totalScrolls < 100 && !shouldStop) {
     totalScrolls++;
+    
+    const currentReviewCount = countUniqueReviews(pane);
+    
+    // Check if we've reached the exact target
+    if (currentReviewCount >= CONFIG.MAX_REVIEWS) {
+      console.log(`🎯 Target reached: ${currentReviewCount}/${CONFIG.MAX_REVIEWS} reviews`);
+      break;
+    }
     
     await performScroll(scrollableElement);
     await wait(CONFIG.SCROLL_TIMEOUT);
@@ -643,19 +657,19 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
       break;
     }
 
-    const currentReviewCount = countUniqueReviews(pane);
+    const newReviewCount = countUniqueReviews(pane);
     
-    if (currentReviewCount > lastReviewCount) {
-      const newReviews = currentReviewCount - lastReviewCount;
-      console.log(`📈 ${newReviews} new reviews (total: ${currentReviewCount})`);
-      lastReviewCount = currentReviewCount;
+    if (newReviewCount > lastReviewCount) {
+      const newReviews = newReviewCount - lastReviewCount;
+      console.log(`📈 ${newReviews} new reviews (total: ${newReviewCount}/${CONFIG.MAX_REVIEWS})`);
+      lastReviewCount = newReviewCount;
       noChangeCount = 0;
 
       // Send progress update
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage({
           type: 'SCRAPING_PROGRESS',
-          data: { reviewCount: currentReviewCount, maxReviews: CONFIG.MAX_REVIEWS, phase: 'Loading reviews' }
+          data: { reviewCount: newReviewCount, maxReviews: CONFIG.MAX_REVIEWS, phase: 'Loading reviews' }
         });
       }
 
@@ -663,18 +677,13 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
       await wait(1000);
     } else {
       noChangeCount++;
-      console.log(`⏸️ No new reviews (${noChangeCount}/${CONFIG.NO_CHANGE_LIMIT})`);
-    }
-
-    // Exit conditions
-    if (currentReviewCount >= CONFIG.MAX_REVIEWS) {
-      console.log(`🎯 Max reviews reached: ${CONFIG.MAX_REVIEWS}`);
-      break;
-    }
-
-    if (noChangeCount >= CONFIG.NO_CHANGE_LIMIT) {
-      console.log("🏁 No new content detected, stopping");
-      break;
+      console.log(`⏸️ No new reviews (${noChangeCount}) - Found: ${newReviewCount}/${CONFIG.MAX_REVIEWS}`);
+      
+      // Only stop due to no changes if we've tried many times AND found a reasonable number
+      if (noChangeCount >= Math.max(CONFIG.NO_CHANGE_LIMIT * 2, 20) && newReviewCount > CONFIG.MAX_REVIEWS * 0.8) {
+        console.log("🏁 Stopping: too many attempts without changes and found substantial results");
+        break;
+      }
     }
   }
 

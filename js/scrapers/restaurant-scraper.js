@@ -71,12 +71,22 @@ export class RestaurantScraper {
     // Send initial progress
     this.sendProgress('Scrolling to load restaurants', 0);
 
-    while (noChangeCount < maxNoChange && scrollAttempts < maxScrollAttempts && !this.shouldStop) {
+    while (scrollAttempts < maxScrollAttempts && !this.shouldStop) {
       scrollAttempts++;
+      
+      // Count current restaurants
+      const currentRestaurants = this.countRestaurants(pane);
+      
+      // Check if we've reached the exact target
+      if (currentRestaurants >= maxRestaurants) {
+        log(`🎯 Target reached: ${currentRestaurants}/${maxRestaurants} restaurants`, 'success');
+        this.sendProgress('Target reached', currentRestaurants);
+        break;
+      }
       
       // Scroll to bottom
       pane.scrollTo(0, pane.scrollHeight);
-      log(`Scroll attempt ${scrollAttempts}/${maxScrollAttempts} (height: ${lastHeight})`);
+      log(`Scroll attempt ${scrollAttempts}/${maxScrollAttempts} - Found: ${currentRestaurants}/${maxRestaurants}`);
       
       // Wait for content to load
       await wait(this.config.RESTAURANT_SCROLL_DELAY || 600);
@@ -93,28 +103,24 @@ export class RestaurantScraper {
         lastHeight = newHeight;
         noChangeCount = 0;
         
-        // Count current restaurants and send progress
-        const currentRestaurants = this.countRestaurants(pane);
-        
-        // Check if we've reached the maximum restaurants limit
-        if (currentRestaurants >= maxRestaurants) {
-          log(`Maximum restaurants limit reached: ${maxRestaurants}`, 'success');
-          this.sendProgress('Maximum restaurants reached', currentRestaurants);
-          break;
-        }
-        
         this.sendProgress('Loading restaurants', currentRestaurants);
         
         // Wait for new content to render
         await wait(1000);
       } else {
         noChangeCount++;
-        log(`No height change (${noChangeCount}/${maxNoChange})`, 'warn');
+        log(`⏸️ No height change (${noChangeCount})`, 'warn');
+        
+        // Only stop due to no changes if we've tried many times AND found a reasonable number
+        if (noChangeCount >= Math.max(maxNoChange * 3, 15) && currentRestaurants > maxRestaurants * 0.8) {
+          log("🏁 Stopping: too many attempts without changes and found substantial results", 'info');
+          break;
+        }
       }
 
       // Check for end banner
       if (pane.querySelector('.HlvSq')) {
-        log("End banner detected", 'success');
+        log("🏁 End banner detected - no more content available", 'success');
         break;
       }
     }
