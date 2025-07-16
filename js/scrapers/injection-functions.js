@@ -291,7 +291,8 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
     MAX_REVIEWS: userConfig?.MAX_REVIEWS || 2000,
     SCROLL_TIMEOUT: userConfig?.SCROLL_TIMEOUT || 800,
     NO_CHANGE_LIMIT: userConfig?.NO_CHANGE_LIMIT || 15,
-    BATCH_SIZE: userConfig?.BATCH_SIZE || 50
+    BATCH_SIZE: userConfig?.BATCH_SIZE || 50,
+    REVIEW_SORT: userConfig?.REVIEW_SORT || 'most-relevant'
   };
 
   // Stop flag for pause functionality
@@ -394,6 +395,328 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
     
     console.log('⚠️ Reviews tab not found after exhaustive search, proceeding anyway');
     return false;
+  };
+
+  const setReviewSortOrder = async (sortType) => {
+    console.log(`🔄 Setting review sort order to: ${sortType}`);
+    
+    try {
+      // Wait for reviews to fully load after tab click
+      await wait(2000);
+      
+      // COMPLETELY NEW APPROACH: Deep DOM analysis
+      console.log('🔍 Starting comprehensive DOM analysis...');
+      
+      // First, let's understand the current page structure
+      const allButtons = Array.from(document.querySelectorAll('button'));
+      const allClickables = Array.from(document.querySelectorAll('[role="button"], [tabindex="0"], .clickable, [onclick]'));
+      const allInteractive = [...allButtons, ...allClickables];
+      
+      console.log(`📊 Found ${allButtons.length} buttons and ${allInteractive.length} total interactive elements`);
+      
+      // Strategy 1: Look for elements containing sort-related text
+      let sortButton = null;
+      const sortKeywords = ['sort', 'Sort', 'SORT', 'most relevant', 'Most relevant', 'relevance', 'Relevance'];
+      
+      for (const element of allInteractive) {
+        const text = element.textContent?.trim() || '';
+        const ariaLabel = element.getAttribute('aria-label') || '';
+        const title = element.getAttribute('title') || '';
+        const fullText = `${text} ${ariaLabel} ${title}`.toLowerCase();
+        
+        if (sortKeywords.some(keyword => fullText.includes(keyword.toLowerCase()))) {
+          console.log(`🎯 Potential sort element found:`, {
+            tagName: element.tagName,
+            text: text,
+            ariaLabel: ariaLabel,
+            className: element.className,
+            id: element.id,
+            jsaction: element.getAttribute('jsaction'),
+            role: element.getAttribute('role')
+          });
+          
+          // Prioritize buttons with 'sort' in jsaction or specific text patterns
+          if (element.getAttribute('jsaction')?.includes('sort') || 
+              text.toLowerCase().includes('most relevant') ||
+              ariaLabel.toLowerCase().includes('sort')) {
+            sortButton = element;
+            console.log(`✅ Selected as sort button: "${text}" (${element.tagName})`);
+            break;
+          }
+        }
+      }
+      
+      // Strategy 2: If no clear sort button, try URL-based approach
+      if (!sortButton) {
+        console.log('🔍 No sort button found, trying URL-based approach...');
+        
+        // Try to find elements that might trigger URL changes
+        const currentUrl = window.location.href;
+        console.log(`📍 Current URL: ${currentUrl}`);
+        
+        // Look for data attributes that might control sorting
+        const elementsWithData = document.querySelectorAll('[data-sort], [data-value*="sort"], [data-index]');
+        console.log(`📊 Found ${elementsWithData.length} elements with data attributes`);
+        
+        for (const element of elementsWithData) {
+          console.log(`📋 Data element:`, {
+            tagName: element.tagName,
+            text: element.textContent?.trim(),
+            datasets: Object.keys(element.dataset),
+            dataValues: element.dataset
+          });
+        }
+        
+        // Fallback: try any button that looks like it could be a filter/sort
+        const fallbackButtons = allButtons.filter(btn => {
+          const text = btn.textContent?.toLowerCase() || '';
+          return text.includes('relevant') || text.includes('recent') || text.includes('rating') || 
+                 text.includes('newest') || text.length < 20; // Short text might be sort options
+        });
+        
+        if (fallbackButtons.length > 0) {
+          sortButton = fallbackButtons[0];
+          console.log(`🔄 Using fallback button: "${sortButton.textContent}"`);
+        }
+      }
+      
+      if (!sortButton) {
+        console.log('❌ No sort button found after comprehensive search');
+        return false;
+      }
+      
+      // NEW APPROACH: Observe before clicking
+      console.log('🔍 Analyzing interaction patterns...');
+      
+      // Store initial state
+      const initialUrl = window.location.href;
+      const initialButtonText = sortButton.textContent?.trim();
+      
+      console.log('📸 Pre-click state:', {
+        url: initialUrl,
+        buttonText: initialButtonText,
+        buttonDetails: {
+          tagName: sortButton.tagName,
+          className: sortButton.className,
+          id: sortButton.id,
+          jsaction: sortButton.getAttribute('jsaction'),
+          coords: sortButton.getBoundingClientRect()
+        }
+      });
+      
+      // Try different interaction approaches in sequence
+      let interactionSuccessful = false;
+      
+      // Method 1: Standard click with observation
+      console.log('🎯 Method 1: Standard click with URL monitoring');
+      
+      const urlObserver = setInterval(() => {
+        if (window.location.href !== initialUrl) {
+          console.log(`📍 URL changed from ${initialUrl} to ${window.location.href}`);
+          clearInterval(urlObserver);
+          interactionSuccessful = true;
+        }
+      }, 100);
+      
+      // Click the button
+      sortButton.click();
+      await wait(1500);
+      
+      clearInterval(urlObserver);
+      
+      // Method 2: If no URL change, try jsaction approach
+      if (!interactionSuccessful && sortButton.getAttribute('jsaction')) {
+        console.log('🎯 Method 2: Triggering jsaction directly');
+        
+        const jsaction = sortButton.getAttribute('jsaction');
+        console.log(`📋 Found jsaction: ${jsaction}`);
+        
+        // Try to trigger the jsaction event
+        const jsActionEvent = new Event('click', { bubbles: true });
+        jsActionEvent.jsaction = jsaction;
+        sortButton.dispatchEvent(jsActionEvent);
+        await wait(1000);
+      }
+      
+      // Method 3: Search for dropdown in DOM and click directly
+      console.log('🔍 Method 3: Direct dropdown interaction');
+      
+      // Look for dropdown elements that might have appeared
+      const possibleDropdowns = document.querySelectorAll([
+        '[role="menu"]',
+        '[role="listbox"]', 
+        '[aria-expanded="true"]',
+        '.dropdown-menu',
+        '[data-dropdown]',
+        'ul[style*="position"]',
+        'div[style*="position: absolute"]',
+        'div[style*="z-index"]'
+      ].join(', '));
+      
+      console.log(`📋 Found ${possibleDropdowns.length} potential dropdown elements`);
+      
+      // Instead of looking in dropdown, try direct navigation approach
+      if (possibleDropdowns.length === 0) {
+        console.log('🎯 Method 4: Direct option search across entire page');
+        
+        // Look for ALL elements that might be sort options
+        const sortTexts = {
+          'most-relevant': ['most relevant', 'relevance', 'relevant', 'default'],
+          'newest': ['newest', 'recent', 'new', 'latest', 'date'],
+          'highest-rating': ['highest', 'high rating', 'best', 'top rated'],
+          'lowest-rating': ['lowest', 'low rating', 'worst', 'poor']
+        };
+        
+        const targetTexts = sortTexts[sortType] || sortTexts['most-relevant'];
+        console.log(`🎯 Looking for elements containing: ${targetTexts.join(', ')}`);
+        
+        // Search ALL clickable elements on the page
+        const allElements = document.querySelectorAll('*');
+        let foundDirectOption = null;
+        
+        for (const element of allElements) {
+          const text = element.textContent?.toLowerCase().trim() || '';
+          const ariaLabel = element.getAttribute('aria-label')?.toLowerCase() || '';
+          const title = element.getAttribute('title')?.toLowerCase() || '';
+          const fullText = `${text} ${ariaLabel} ${title}`;
+          
+          // Check if this element matches our target sort type
+          if (targetTexts.some(target => fullText.includes(target.toLowerCase()))) {
+            // Only consider clickable elements
+            if (element.tagName === 'BUTTON' || 
+                element.getAttribute('role') === 'button' || 
+                element.getAttribute('tabindex') === '0' ||
+                element.onclick ||
+                element.getAttribute('jsaction') ||
+                window.getComputedStyle(element).cursor === 'pointer') {
+              
+              console.log(`🎯 Found direct option candidate:`, {
+                text: text,
+                tagName: element.tagName,
+                className: element.className,
+                ariaLabel: ariaLabel,
+                jsaction: element.getAttribute('jsaction')
+              });
+              
+              foundDirectOption = element;
+              break;
+            }
+          }
+        }
+        
+        if (foundDirectOption && foundDirectOption !== sortButton) {
+          console.log(`🎯 Clicking direct option: "${foundDirectOption.textContent}"`);
+          foundDirectOption.click();
+          interactionSuccessful = true;
+          await wait(2000);
+        }
+      }
+      
+      // Final verification approach
+      console.log('🔍 Starting verification process...');
+      
+      // Store initial state for comparison
+      const finalInitialSortText = sortButton.textContent?.toLowerCase() || '';
+      const finalInitialReviews = Array.from(document.querySelectorAll('[data-review-id]')).slice(0, 3).map(el => el.getAttribute('data-review-id'));
+      
+      console.log('📊 Initial verification state:', {
+        sortButtonText: finalInitialSortText,
+        firstThreeReviewIds: finalInitialReviews,
+        targetSortType: sortType
+      });
+      
+      // Wait and check for changes with multiple verification methods
+      let finalVerificationAttempts = 0;
+      let finalSortApplied = false;
+      const maxAttempts = 10;
+      
+      while (finalVerificationAttempts < maxAttempts && !finalSortApplied) {
+        await wait(1000);
+        finalVerificationAttempts++;
+        
+        // Method 1: Check button text change
+        const currentSortText = sortButton.textContent?.toLowerCase() || '';
+        const sortTexts = {
+          'most-relevant': ['most relevant', 'relevance', 'relevant'],
+          'newest': ['newest', 'recent', 'new', 'latest'],
+          'highest-rating': ['highest rating', 'high rating', 'highest', 'best'],
+          'lowest-rating': ['lowest rating', 'low rating', 'lowest', 'worst']
+        };
+        const targetTexts = sortTexts[sortType] || sortTexts['most-relevant'];
+        const buttonTextChanged = targetTexts.some(target => currentSortText.includes(target.toLowerCase()));
+        
+        // Method 2: Check review order change
+        const currentReviews = Array.from(document.querySelectorAll('[data-review-id]')).slice(0, 3).map(el => el.getAttribute('data-review-id'));
+        const reviewOrderChanged = JSON.stringify(finalInitialReviews) !== JSON.stringify(currentReviews);
+        
+        // Method 3: Check URL change for sort parameter
+        const currentUrl = window.location.href;
+        const urlHasSortParam = currentUrl !== initialUrl || currentUrl.includes('sort') || currentUrl.includes('orderby');
+        
+        console.log(`🔍 Verification attempt ${finalVerificationAttempts}/${maxAttempts}:`, {
+          buttonText: currentSortText,
+          buttonChanged: buttonTextChanged,
+          reviewOrderChanged: reviewOrderChanged,
+          urlChanged: urlHasSortParam,
+          currentFirstReview: currentReviews[0]
+        });
+        
+        if (buttonTextChanged || reviewOrderChanged || urlHasSortParam) {
+          finalSortApplied = true;
+          console.log('✅ Sort verification successful!');
+          break;
+        }
+        
+        // Progressive retry strategies
+        if (finalVerificationAttempts === 3 && !finalSortApplied) {
+          console.log('🔄 Attempt 3: Trying alternative click on sort button...');
+          // Try different click method
+          const rect = sortButton.getBoundingClientRect();
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2
+          });
+          sortButton.dispatchEvent(clickEvent);
+        }
+        
+        if (finalVerificationAttempts === 6 && !finalSortApplied) {
+          console.log('🔄 Attempt 6: Searching for sort options in page...');
+          // Look for sort options that might be visible now
+          const allClickables = document.querySelectorAll('button, [role="button"], [tabindex="0"], [onclick]');
+          
+          for (const element of allClickables) {
+            const text = element.textContent?.toLowerCase() || '';
+            const ariaLabel = element.getAttribute('aria-label')?.toLowerCase() || '';
+            
+            if (targetTexts.some(target => text.includes(target) || ariaLabel.includes(target))) {
+              console.log(`🎯 Found target option in page: "${element.textContent}"`);
+              element.click();
+              await wait(1000);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (finalSortApplied) {
+        console.log(`✅ Sort successfully applied after ${finalVerificationAttempts} attempts!`);
+        return true;
+      } else {
+        console.log(`⚠️ Sort could not be verified after ${finalVerificationAttempts} attempts`);
+        console.log('💡 The sort may still be processing or interface may have changed');
+        return false;
+      }
+      
+
+      
+    } catch (error) {
+      console.log(`⚠️ Error setting sort order: ${error.message}`);
+      console.log('🔍 Stack trace:', error.stack);
+      return false;
+    }
   };
 
   const findReviewsPane = () => {
@@ -591,6 +914,11 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
   if (tabClicked) {
     console.log('⏳ Waiting for reviews to load after tab click...');
     await wait(1000);
+    
+    // Set the sort order if specified
+    if (CONFIG.REVIEW_SORT && CONFIG.REVIEW_SORT !== 'most-relevant') {
+      await setReviewSortOrder(CONFIG.REVIEW_SORT);
+    }
   }
 
   const pane = findReviewsPane();

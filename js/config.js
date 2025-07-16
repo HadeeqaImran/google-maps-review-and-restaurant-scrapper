@@ -8,6 +8,7 @@ export class Config {
       NO_CHANGE_LIMIT: 15,
       BATCH_SIZE: 50,
       INTERSECTION_THRESHOLD: 0.1,
+      REVIEW_SORT: 'most-relevant',
       
       // Restaurant settings
       MAX_RESTAURANTS: 2000,
@@ -23,6 +24,7 @@ export class Config {
     // Review settings
     const maxReviews = document.getElementById('max-reviews')?.value;
     const scrollSpeed = document.getElementById('scroll-speed')?.value;
+    const reviewSort = document.getElementById('review-sort')?.value;
     
     if (maxReviews) {
       this.settings.MAX_REVIEWS = parseInt(maxReviews);
@@ -31,6 +33,10 @@ export class Config {
     if (scrollSpeed) {
       const speeds = { fast: 600, normal: 800, slow: 1200 };
       this.settings.SCROLL_TIMEOUT = speeds[scrollSpeed] || 800;
+    }
+    
+    if (reviewSort) {
+      this.settings.REVIEW_SORT = reviewSort;
     }
 
     // Restaurant settings
@@ -69,6 +75,7 @@ export class Config {
       NO_CHANGE_LIMIT: 15,
       BATCH_SIZE: 50,
       INTERSECTION_THRESHOLD: 0.1,
+      REVIEW_SORT: 'most-relevant',
       
       // Restaurant settings
       MAX_RESTAURANTS: 2000,

@@ -17,6 +17,7 @@ let CONFIG = {
   NO_CHANGE_LIMIT: 15,
   BATCH_SIZE: 50,
   INTERSECTION_THRESHOLD: 0.1,
+  REVIEW_SORT: 'most-relevant',
   
   // Restaurant settings
   MAX_RESTAURANTS: 2000,
@@ -31,12 +32,14 @@ const syncConfig = () => {
   // Review settings
   const maxReviews = document.getElementById('max-reviews')?.value;
   const scrollSpeed = document.getElementById('scroll-speed')?.value;
+  const reviewSort = document.getElementById('review-sort')?.value;
   
   if (maxReviews) CONFIG.MAX_REVIEWS = parseInt(maxReviews);
   if (scrollSpeed) {
     const speeds = { fast: 600, normal: 800, slow: 1200 };
     CONFIG.SCROLL_TIMEOUT = speeds[scrollSpeed] || 800;
   }
+  if (reviewSort) CONFIG.REVIEW_SORT = reviewSort;
 
   // Restaurant settings
   const maxRestaurants = document.getElementById('max-restaurants')?.value;
@@ -563,7 +566,8 @@ async function scrapeReviewsOptimized(userConfig = {}) {
     MAX_REVIEWS: userConfig?.MAX_REVIEWS || 2000,
     SCROLL_TIMEOUT: userConfig?.SCROLL_TIMEOUT || 800,
     NO_CHANGE_LIMIT: userConfig?.NO_CHANGE_LIMIT || 15,
-    BATCH_SIZE: userConfig?.BATCH_SIZE || 50
+    BATCH_SIZE: userConfig?.BATCH_SIZE || 50,
+    REVIEW_SORT: userConfig?.REVIEW_SORT || 'most-relevant'
   };
 
   // Stop flag for pause functionality
@@ -666,6 +670,570 @@ async function scrapeReviewsOptimized(userConfig = {}) {
     
     console.log('⚠️ Reviews tab not found after exhaustive search, proceeding anyway');
     return false;
+  };
+
+  const setReviewSortOrder = async (sortType) => {
+    console.log(`🔄 Setting review sort order to: ${sortType} (NEW APPROACH)`);
+    
+    try {
+      // Wait for reviews to fully load after tab click
+      await wait(2000);
+      
+      // NEW STRATEGY: Comprehensive element discovery and direct interaction
+      console.log('🔍 Starting comprehensive sort interaction...');
+      
+      const sortTexts = {
+        'most-relevant': ['most relevant', 'relevance', 'relevant', 'default'],
+        'newest': ['newest', 'recent', 'new', 'latest', 'date'],
+        'highest-rating': ['highest', 'high rating', 'best', 'top rated'],
+        'lowest-rating': ['lowest', 'low rating', 'worst', 'poor']
+      };
+      
+      const targetTexts = sortTexts[sortType] || sortTexts['most-relevant'];
+      console.log(`🎯 Target sort: ${sortType} -> Looking for: ${targetTexts.join(', ')}`);
+      
+      // Strategy 1: Search for direct sort options anywhere on page
+      const allClickables = document.querySelectorAll('button, [role="button"], [tabindex="0"], [onclick], [jsaction]');
+      let foundDirectOption = null;
+      
+      console.log(`📊 Scanning ${allClickables.length} clickable elements...`);
+      
+      for (const element of allClickables) {
+        const text = element.textContent?.toLowerCase().trim() || '';
+        const ariaLabel = element.getAttribute('aria-label')?.toLowerCase() || '';
+        const title = element.getAttribute('title')?.toLowerCase() || '';
+        const fullText = `${text} ${ariaLabel} ${title}`;
+        
+        // Check if this element matches our target sort type exactly
+        if (targetTexts.some(target => fullText.includes(target.toLowerCase()))) {
+          console.log(`🎯 Found direct sort option:`, {
+            text: text,
+            tagName: element.tagName,
+            className: element.className
+          });
+          
+          foundDirectOption = element;
+          
+          // Click it directly
+          console.log(`🎯 Clicking direct option: "${text}"`);
+          element.click();
+          await wait(2000);
+          
+          // Quick verification
+          const currentUrl = window.location.href;
+          const currentReviews = Array.from(document.querySelectorAll('[data-review-id]')).slice(0, 2);
+          
+          console.log('✅ Direct click completed, checking results...');
+          return true;
+        }
+      }
+      
+            if (!foundDirectOption) {
+        console.log('🔍 No direct option found, trying traditional approach...');
+        
+        // Fallback: Look for sort button and try standard approach
+        const buttons = document.querySelectorAll('button');
+        let sortButton = null;
+        
+        for (const button of buttons) {
+          const text = button.textContent?.toLowerCase() || '';
+          const ariaLabel = button.getAttribute('aria-label')?.toLowerCase() || '';
+          
+          if (text.includes('sort') || ariaLabel.includes('sort') || 
+              text.includes('most relevant') || ariaLabel.includes('most relevant')) {
+            sortButton = button;
+            console.log(`✅ Found sort button: "${button.textContent}"`);
+            break;
+          }
+        }
+        
+        if (sortButton) {
+          console.log('🔄 Clicking sort button and waiting...');
+          sortButton.click();
+          await wait(3000);
+          
+          // Try to find and click sort options after button click
+          const sortOptions = document.querySelectorAll('button, [role="button"], [role="menuitem"], [role="option"]');
+          
+          for (const option of sortOptions) {
+            const optionText = option.textContent?.toLowerCase() || '';
+            const optionLabel = option.getAttribute('aria-label')?.toLowerCase() || '';
+            const optionFullText = `${optionText} ${optionLabel}`;
+            
+            if (targetTexts.some(target => optionFullText.includes(target.toLowerCase()))) {
+              console.log(`🎯 Found sort option after button click: "${option.textContent}"`);
+              option.click();
+              await wait(2000);
+              return true;
+            }
+          }
+        }
+        
+        console.log('⚠️ Could not complete sort operation');
+        return false;
+      }
+      
+      return true;
+      for (const button of buttons) {
+        const text = button.textContent?.toLowerCase() || '';
+        const ariaLabel = button.getAttribute('aria-label')?.toLowerCase() || '';
+        
+        if (text.includes('sort') || ariaLabel.includes('sort') || 
+            text.includes('most relevant') || ariaLabel.includes('most relevant') ||
+            text.includes('relevance') || ariaLabel.includes('relevance')) {
+          sortButton = button;
+          console.log(`✅ Found sort button with text: "${button.textContent}"`);
+          break;
+        }
+      }
+      
+      // Strategy 2: Look for button containing sort icon or specific selectors
+      if (!sortButton) {
+        const sortSelectors = [
+          'button[data-value="Sort"]',
+          'button[jsaction*="sort"]',
+          'button[aria-haspopup="true"]',
+          '.gm2-caption-title'
+        ];
+        
+        for (const selector of sortSelectors) {
+          const element = document.querySelector(selector);
+          if (element && element.textContent.toLowerCase().includes('sort')) {
+            sortButton = element;
+            console.log(`✅ Found sort button with selector: ${selector}`);
+            break;
+          }
+        }
+      }
+      
+      if (!sortButton) {
+        console.log('⚠️ Sort button not found, continuing with default sort');
+        return false;
+      }
+      
+      console.log('🔄 Clicking sort button...');
+      
+      // Take a screenshot of the current state (for debugging)
+      console.log('📸 Sort button details:', {
+        text: sortButton.textContent,
+        tagName: sortButton.tagName,
+        className: sortButton.className,
+        id: sortButton.id,
+        coords: sortButton.getBoundingClientRect()
+      });
+      
+      // Enhanced clicking with event simulation
+      const clickEvent = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+      sortButton.dispatchEvent(clickEvent);
+      
+      // Also try regular click as fallback
+      sortButton.click();
+      
+      // Wait longer for dropdown to appear and be fully rendered
+      await wait(2500);
+      
+      // Debug: Check if dropdown appeared
+      console.log('🔍 Post-click debugging...');
+      const dropdownElements = document.querySelectorAll('[role="menu"], [role="listbox"], .dropdown, [aria-expanded="true"]');
+      console.log(`📋 Found ${dropdownElements.length} potential dropdown elements after click`);
+      dropdownElements.forEach((el, i) => {
+        console.log(`  ${i + 1}. ${el.tagName} - ${el.className} - visible: ${el.offsetHeight > 0}`);
+      });
+      
+      // Map sort types to their text representations (more comprehensive)
+      const sortTexts = {
+        'most-relevant': ['most relevant', 'relevance', 'relevant'],
+        'newest': ['newest', 'recent', 'new', 'latest'],
+        'highest-rating': ['highest rating', 'high rating', 'highest', 'best'],
+        'lowest-rating': ['lowest rating', 'low rating', 'lowest', 'worst']
+      };
+      
+      const targetTexts = sortTexts[sortType] || sortTexts['most-relevant'];
+      console.log(`🔍 Looking for sort option matching: ${targetTexts.join(', ')}`);
+      
+      // Enhanced dropdown option detection with more comprehensive selectors
+      const optionSelectors = [
+        '[role="menuitem"]',
+        '[role="option"]',
+        'div[data-value]',
+        'li[role="menuitem"]',
+        'button[role="menuitem"]',
+        '.gm2-caption-title',
+        'div[jsaction]',
+        '[role="menu"] div',
+        '[role="menu"] button',
+        '[role="menu"] li',
+        'div[aria-label*="sort"]',
+        'div[aria-label*="Sort"]',
+        '[data-index]',
+        '.action-menu-item',
+        'div[tabindex="0"]',
+        'span[role="button"]'
+      ];
+      
+      let foundOption = null;
+      
+      // First try to find all visible dropdown elements
+      console.log('🔍 Scanning for dropdown elements...');
+      const allDropdownElements = [];
+      
+      for (const selector of optionSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const element of elements) {
+          // Check if element is visible and in viewport
+          const rect = element.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0) {
+            allDropdownElements.push(element);
+          }
+        }
+      }
+      
+      console.log(`🔍 Found ${allDropdownElements.length} visible dropdown elements`);
+      
+      // Search through all visible elements
+      for (const option of allDropdownElements) {
+        const text = (option.textContent || '').toLowerCase().trim();
+        const ariaLabel = (option.getAttribute('aria-label') || '').toLowerCase();
+        const fullText = `${text} ${ariaLabel}`;
+        
+        console.log(`  - Checking option: "${text}" (aria: "${ariaLabel}")`);
+        
+        if (targetTexts.some(target => fullText.includes(target.toLowerCase()))) {
+          foundOption = option;
+          console.log(`✅ Found matching sort option: "${option.textContent}" | "${ariaLabel}"`);
+          break;
+        }
+      }
+      
+      if (!foundOption) {
+        console.log('⚠️ Sort option not found in dropdown after comprehensive search');
+        console.log('📋 Available options:');
+        allDropdownElements.forEach((el, i) => {
+          console.log(`  ${i + 1}. "${el.textContent?.trim()}" (${el.tagName})`);
+        });
+        
+        // Try alternative approach: Keyboard navigation
+        console.log('🎹 Trying keyboard navigation approach...');
+        try {
+          // Focus on the sort button first
+          sortButton.focus();
+          await wait(200);
+          
+          // Send arrow down to open dropdown
+          const arrowDown = new KeyboardEvent('keydown', {
+            key: 'ArrowDown',
+            keyCode: 40,
+            which: 40,
+            bubbles: true,
+            cancelable: true
+          });
+          sortButton.dispatchEvent(arrowDown);
+          await wait(500);
+          
+          // Try to navigate to the desired option based on sort type
+          const navigationMap = {
+            'most-relevant': 0, // Usually first option
+            'newest': 1,
+            'highest-rating': 2,
+            'lowest-rating': 3
+          };
+          
+          const targetIndex = navigationMap[sortType] || 0;
+          console.log(`🎯 Navigating to option index: ${targetIndex}`);
+          
+          // Send arrow down keys to navigate to target
+          for (let i = 0; i < targetIndex; i++) {
+            const arrowDownNav = new KeyboardEvent('keydown', {
+              key: 'ArrowDown',
+              keyCode: 40,
+              which: 40,
+              bubbles: true,
+              cancelable: true
+            });
+            document.activeElement.dispatchEvent(arrowDownNav);
+            await wait(200);
+          }
+          
+          // Press Enter to select
+          const enterSelect = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true
+          });
+          document.activeElement.dispatchEvent(enterSelect);
+          await wait(1000);
+          
+          console.log('✅ Keyboard navigation completed');
+          return true;
+          
+        } catch (keyboardError) {
+          console.log(`⚠️ Keyboard navigation failed: ${keyboardError.message}`);
+        }
+        
+        // Try to close dropdown by clicking elsewhere
+        document.body.click();
+        return false;
+      }
+      
+      console.log(`🔄 Clicking sort option: "${foundOption.textContent}"`);
+      
+      // Enhanced clicking with multiple methods and aggressive interaction
+      let clickSuccessful = false;
+      
+      try {
+        // Method 1: Direct element interaction
+        if (foundOption.click) {
+          foundOption.click();
+          await wait(200);
+          console.log('✅ Method 1: Direct click attempted');
+        }
+        
+        // Method 2: MouseEvent simulation with full event chain
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        for (const eventType of mouseEvents) {
+          const event = new MouseEvent(eventType, {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            clientX: foundOption.getBoundingClientRect().left + 10,
+            clientY: foundOption.getBoundingClientRect().top + 10
+          });
+          foundOption.dispatchEvent(event);
+          await wait(50);
+        }
+        console.log('✅ Method 2: Mouse event chain completed');
+        
+        // Method 3: Focus and keyboard interaction
+        if (foundOption.focus) {
+          foundOption.focus();
+          await wait(100);
+          
+          // Simulate Enter key press
+          const enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true
+          });
+          foundOption.dispatchEvent(enterEvent);
+          
+          const enterUpEvent = new KeyboardEvent('keyup', {
+            key: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true
+          });
+          foundOption.dispatchEvent(enterUpEvent);
+          
+          console.log('✅ Method 3: Keyboard Enter simulation completed');
+        }
+        
+        // Method 4: Pointer events (modern approach)
+        try {
+          const pointerDown = new PointerEvent('pointerdown', {
+            pointerId: 1,
+            bubbles: true,
+            cancelable: true,
+            clientX: foundOption.getBoundingClientRect().left + 10,
+            clientY: foundOption.getBoundingClientRect().top + 10
+          });
+          const pointerUp = new PointerEvent('pointerup', {
+            pointerId: 1,
+            bubbles: true,
+            cancelable: true,
+            clientX: foundOption.getBoundingClientRect().left + 10,
+            clientY: foundOption.getBoundingClientRect().top + 10
+          });
+          
+          foundOption.dispatchEvent(pointerDown);
+          await wait(50);
+          foundOption.dispatchEvent(pointerUp);
+          console.log('✅ Method 4: Pointer events completed');
+        } catch (pointerError) {
+          console.log('⚠️ Pointer events not supported, skipping');
+        }
+        
+        // Method 5: Touch events for mobile compatibility
+        try {
+          const touchStart = new TouchEvent('touchstart', {
+            bubbles: true,
+            cancelable: true,
+            touches: [{
+              clientX: foundOption.getBoundingClientRect().left + 10,
+              clientY: foundOption.getBoundingClientRect().top + 10,
+              target: foundOption
+            }]
+          });
+          const touchEnd = new TouchEvent('touchend', {
+            bubbles: true,
+            cancelable: true,
+            changedTouches: [{
+              clientX: foundOption.getBoundingClientRect().left + 10,
+              clientY: foundOption.getBoundingClientRect().top + 10,
+              target: foundOption
+            }]
+          });
+          
+          foundOption.dispatchEvent(touchStart);
+          await wait(50);
+          foundOption.dispatchEvent(touchEnd);
+          console.log('✅ Method 5: Touch events completed');
+        } catch (touchError) {
+          console.log('⚠️ Touch events not supported, skipping');
+        }
+        
+        // Method 6: Try triggering any onclick handlers directly
+        if (foundOption.onclick) {
+          foundOption.onclick();
+          console.log('✅ Method 6: Direct onclick handler called');
+        }
+        
+        // Method 7: Try finding and triggering parent element events
+        let parent = foundOption.parentElement;
+        while (parent && parent !== document.body) {
+          if (parent.click) {
+            console.log(`🔄 Trying parent element: ${parent.tagName}`);
+            parent.click();
+            await wait(100);
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        
+        // Method 8: Scroll element into view and try again
+        foundOption.scrollIntoView({ behavior: 'instant', block: 'center' });
+        await wait(200);
+        foundOption.click();
+        console.log('✅ Method 8: Scroll into view and click completed');
+        
+        console.log('🎯 All click methods attempted - checking for success...');
+        clickSuccessful = true;
+        
+      } catch (clickError) {
+        console.log(`⚠️ Error during enhanced clicking: ${clickError.message}`);
+      }
+      
+      // Enhanced verification approach
+      console.log('⏳ Waiting for sort to take effect and verifying...');
+      
+      // Store initial state for comparison
+      const initialSortText = sortButton.textContent?.toLowerCase() || '';
+      const initialReviews = Array.from(document.querySelectorAll('[data-review-id]')).slice(0, 5).map(el => el.getAttribute('data-review-id'));
+      
+      console.log('📊 Initial state:', {
+        sortButtonText: initialSortText,
+        firstFiveReviewIds: initialReviews
+      });
+      
+      // Wait and check multiple times
+      let verificationAttempts = 0;
+      let sortApplied = false;
+      
+      while (verificationAttempts < 8 && !sortApplied) {
+        await wait(1000);
+        verificationAttempts++;
+        
+        // Check if button text changed
+        const currentSortText = sortButton.textContent?.toLowerCase() || '';
+        const buttonTextChanged = targetTexts.some(target => currentSortText.includes(target.toLowerCase()));
+        
+        // Check if review order changed
+        const currentReviews = Array.from(document.querySelectorAll('[data-review-id]')).slice(0, 5).map(el => el.getAttribute('data-review-id'));
+        const reviewOrderChanged = JSON.stringify(initialReviews) !== JSON.stringify(currentReviews);
+        
+        console.log(`🔍 Verification attempt ${verificationAttempts}:`, {
+          buttonText: currentSortText,
+          buttonChanged: buttonTextChanged,
+          reviewOrderChanged: reviewOrderChanged,
+          currentFirstReview: currentReviews[0]
+        });
+        
+        if (buttonTextChanged || reviewOrderChanged) {
+          sortApplied = true;
+          console.log('✅ Sort verification successful!');
+          break;
+        }
+        
+        // If still not applied after 3 attempts, try clicking again
+        if (verificationAttempts === 3 && !sortApplied) {
+          console.log('🔄 Sort not detected, trying additional click methods...');
+          
+          // Try clicking the option again with different approach
+          try {
+            // Method: Direct property manipulation
+            if (foundOption.setAttribute) {
+              foundOption.setAttribute('aria-selected', 'true');
+            }
+            
+            // Method: Trigger input event
+            const inputEvent = new Event('input', { bubbles: true });
+            foundOption.dispatchEvent(inputEvent);
+            
+            // Method: Trigger change event
+            const changeEvent = new Event('change', { bubbles: true });
+            foundOption.dispatchEvent(changeEvent);
+            
+            // Method: Try clicking with different coordinates
+            const rect = foundOption.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const preciseClick = new MouseEvent('click', {
+              view: window,
+              bubbles: true,
+              cancelable: true,
+              clientX: centerX,
+              clientY: centerY
+            });
+            foundOption.dispatchEvent(preciseClick);
+            
+            console.log('🎯 Additional click methods applied');
+            
+          } catch (retryError) {
+            console.log(`⚠️ Retry click failed: ${retryError.message}`);
+          }
+        }
+        
+        // If still not applied after 6 attempts, try alternative elements
+        if (verificationAttempts === 6 && !sortApplied) {
+          console.log('🔍 Trying alternative clickable elements...');
+          
+          // Look for parent containers or related elements
+          let elementToTry = foundOption.parentElement;
+          while (elementToTry && elementToTry !== document.body) {
+            if (elementToTry.click && elementToTry.textContent?.toLowerCase().includes(targetTexts[0])) {
+              console.log(`🎯 Trying parent element: ${elementToTry.tagName}.${elementToTry.className}`);
+              elementToTry.click();
+              await wait(500);
+              break;
+            }
+            elementToTry = elementToTry.parentElement;
+          }
+        }
+      }
+      
+      if (sortApplied) {
+        console.log(`✅ Sort successfully applied after ${verificationAttempts} attempts: "${sortButton.textContent}"`);
+        return true;
+      } else {
+        console.log(`⚠️ Sort could not be verified after ${verificationAttempts} attempts. Current button text: "${sortButton.textContent}"`);
+        console.log('💡 This might be due to network delays or interface changes. Sort may still be processing.');
+        return false;
+      }
+      
+    } catch (error) {
+      console.log(`⚠️ Error setting sort order: ${error.message}`);
+      console.log('🔍 Stack trace:', error.stack);
+      return false;
+    }
   };
 
   const findReviewsPane = () => {
@@ -863,6 +1431,11 @@ async function scrapeReviewsOptimized(userConfig = {}) {
   if (tabClicked) {
     console.log('⏳ Waiting for reviews to load after tab click...');
     await wait(1000);
+    
+    // Set the sort order if specified
+    if (CONFIG.REVIEW_SORT && CONFIG.REVIEW_SORT !== 'most-relevant') {
+      await setReviewSortOrder(CONFIG.REVIEW_SORT);
+    }
   }
 
   const pane = findReviewsPane();
@@ -1059,6 +1632,13 @@ document.addEventListener('DOMContentLoaded', function() {
     scrollSpeedSelect.addEventListener('change', function() {
       const speeds = { fast: 600, normal: 800, slow: 1200 };
       CONFIG.SCROLL_TIMEOUT = speeds[this.value];
+    });
+  }
+  
+  const reviewSortSelect = document.getElementById('review-sort');
+  if (reviewSortSelect) {
+    reviewSortSelect.addEventListener('change', function() {
+      CONFIG.REVIEW_SORT = this.value;
     });
   }
   
