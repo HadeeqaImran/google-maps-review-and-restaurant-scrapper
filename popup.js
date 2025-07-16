@@ -3,6 +3,7 @@ const status = document.getElementById('status');
 const pause = document.getElementById('pause');
 const reviewsBtn = document.getElementById('scrape-reviews');
 const stopBtn = document.getElementById('stop-scraping');
+const stopRestaurantBtn = document.getElementById('stop-restaurant-scraping');
 const progressContainer = document.createElement('div');
 progressContainer.id = 'progress-container';
 progressContainer.style.display = 'none';
@@ -32,6 +33,7 @@ const syncConfig = () => {
 // Initially hide the pause and stop buttons
 pause.style.display = 'none';
 stopBtn.style.display = 'none';
+stopRestaurantBtn.style.display = 'none';
 
 // Global scraping state
 let isScrapingActive = false;
@@ -43,9 +45,13 @@ const setStatus = (message, type = 'info') => {
   status.className = type; // success, warning, error, info
 };
 
-// Show/hide stop button
-const showStopButton = (show = true) => {
-  stopBtn.style.display = show ? 'block' : 'none';
+// Show/hide stop buttons
+const showStopButton = (show = true, type = 'review') => {
+  if (type === 'review') {
+    stopBtn.style.display = show ? 'block' : 'none';
+  } else {
+    stopRestaurantBtn.style.display = show ? 'block' : 'none';
+  }
 };
 
 // Stop scraping functionality
@@ -54,7 +60,8 @@ const stopScraping = () => {
     // Send stop signal to the injected script
     chrome.tabs.sendMessage(currentTabId, { type: 'STOP_SCRAPING' });
     isScrapingActive = false;
-    showStopButton(false);
+    showStopButton(false, 'review');
+    showStopButton(false, 'restaurant');
     hideProgress();
     setStatus('🛑 Scraping stopped by user', 'warning');
   }
@@ -106,7 +113,7 @@ button.addEventListener('click', async () => {
   // Set scraping state
   isScrapingActive = true;
   currentTabId = tab.id;
-  showStopButton(true);
+  showStopButton(true, 'restaurant');
 
   // Listen for progress updates from restaurant extraction
   const progressListener = (message, sender, sendResponse) => {
@@ -117,13 +124,13 @@ button.addEventListener('click', async () => {
       const { count } = message.data;
       setStatus(`✅ Extracted ${count} restaurants!`, 'success');
       hideProgress();
-      showStopButton(false);
+      showStopButton(false, 'restaurant');
       isScrapingActive = false;
       chrome.runtime.onMessage.removeListener(progressListener);
     } else if (message.type === 'SCRAPING_STOPPED' && sender.tab.id === tab.id) {
       setStatus('🛑 Restaurant extraction stopped', 'warning');
       hideProgress();
-      showStopButton(false);
+      showStopButton(false, 'restaurant');
       isScrapingActive = false;
       chrome.runtime.onMessage.removeListener(progressListener);
     }
@@ -140,7 +147,7 @@ button.addEventListener('click', async () => {
       console.error('Injection failed:', chrome.runtime.lastError);
       setStatus('❌ Injection error; see console.', 'error');
       hideProgress();
-      showStopButton(false);
+      showStopButton(false, 'restaurant');
       isScrapingActive = false;
       chrome.runtime.onMessage.removeListener(progressListener);
     }
@@ -163,7 +170,7 @@ reviewsBtn.addEventListener('click', async () => {
   // Set scraping state
   isScrapingActive = true;
   currentTabId = tab.id;
-  showStopButton(true);
+  showStopButton(true, 'review');
 
   // Listen for progress updates from the injected script
   const progressListener = (message, sender, sendResponse) => {
@@ -175,14 +182,14 @@ reviewsBtn.addEventListener('click', async () => {
       const { reviewCount } = message.data;
       setStatus(`✅ Scraped ${reviewCount} reviews successfully!`, 'success');
       hideProgress();
-      showStopButton(false);
+      showStopButton(false, 'review');
       isScrapingActive = false;
       if (window.lastCsv) pause.style.display = 'block';
       chrome.runtime.onMessage.removeListener(progressListener);
     } else if (message.type === 'SCRAPING_STOPPED' && sender.tab.id === tab.id) {
       setStatus('🛑 Review scraping stopped', 'warning');
       hideProgress();
-      showStopButton(false);
+      showStopButton(false, 'review');
       isScrapingActive = false;
       if (window.lastCsv) pause.style.display = 'block';
       chrome.runtime.onMessage.removeListener(progressListener);
@@ -200,7 +207,7 @@ reviewsBtn.addEventListener('click', async () => {
       console.error(chrome.runtime.lastError);
       setStatus('❌ Review scraping failed', 'error');
       hideProgress();
-      showStopButton(false);
+      showStopButton(false, 'review');
       isScrapingActive = false;
       chrome.runtime.onMessage.removeListener(progressListener);
     }
@@ -223,6 +230,7 @@ pause.addEventListener('click', () => {
 });
 
 stopBtn.addEventListener('click', stopScraping);
+stopRestaurantBtn.addEventListener('click', stopScraping);
 
 // Optimized restaurant scraping function - SELF-CONTAINED
 async function scrapeAndDownloadOptimized(userConfig = {}) {
@@ -391,6 +399,21 @@ async function scrapeReviewsOptimized(userConfig = {}) {
     NO_CHANGE_LIMIT: userConfig?.NO_CHANGE_LIMIT || 15,
     BATCH_SIZE: userConfig?.BATCH_SIZE || 50
   };
+
+  // Stop flag for pause functionality
+  let shouldStop = false;
+
+  // Listen for stop messages
+  const messageListener = (message, sender, sendResponse) => {
+    if (message.type === 'STOP_SCRAPING') {
+      shouldStop = true;
+      console.log('🛑 Stop signal received');
+    }
+  };
+  
+  if (typeof chrome !== 'undefined' && chrome.runtime) {
+    chrome.runtime.onMessage.addListener(messageListener);
+  }
 
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -616,11 +639,17 @@ async function scrapeReviewsOptimized(userConfig = {}) {
     });
   }
 
-  while (true) {
+  while (true && !shouldStop) {
     totalScrolls++;
     
     await performScroll(scrollableElement);
     await wait(CONFIG.SCROLL_TIMEOUT);
+
+    // Check for stop signal
+    if (shouldStop) {
+      console.log("🛑 Review scraping stopped by user");
+      break;
+    }
 
     const currentReviewCount = countUniqueReviews(pane);
     
@@ -663,6 +692,23 @@ async function scrapeReviewsOptimized(userConfig = {}) {
       type: 'SCRAPING_PROGRESS',
       data: { reviewCount: lastReviewCount, maxReviews: CONFIG.MAX_REVIEWS, phase: 'Processing reviews' }
     });
+  }
+
+  // Clean up message listener
+  if (typeof chrome !== 'undefined' && chrome.runtime) {
+    chrome.runtime.onMessage.removeListener(messageListener);
+  }
+
+  // Handle stopped case
+  if (shouldStop) {
+    console.log("🛑 Review scraping stopped by user");
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        type: 'SCRAPING_STOPPED',
+        data: { reviewCount: lastReviewCount }
+      });
+    }
+    return lastReviewCount;
   }
 
   // Extract reviews
@@ -730,6 +776,17 @@ document.addEventListener('DOMContentLoaded', function() {
       const speeds = { fast: 600, normal: 800, slow: 1200 };
       window.CONFIG.SCROLL_TIMEOUT = speeds[this.value];
     });
+  }
+
+  // Initialize stop buttons
+  const stopButton = document.getElementById('stop-scraping');
+  if (stopButton) {
+    stopButton.style.display = 'none';
+  }
+
+  const stopRestaurantButton = document.getElementById('stop-restaurant-scraping');
+  if (stopRestaurantButton) {
+    stopRestaurantButton.style.display = 'none';
   }
 });
 
