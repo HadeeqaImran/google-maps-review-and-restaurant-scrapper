@@ -237,7 +237,23 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
   
   // Handle stopped case
   if (shouldStop) {
-    console.log("Restaurant extraction stopped by user");
+    console.log("Restaurant extraction stopped by user - downloading partial results");
+    
+    if (restaurants.size > 0) {
+      // Generate and download CSV with partial results
+      const rows = Array.from(restaurants.entries()).map(([url, data]) => [
+        data.name, 
+        data.starRating, 
+        data.reviewCount, 
+        url
+      ]);
+      const header = '"Name","Star Rating","Number of Reviews","Link"';
+      const csv = [header, ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join("\n");
+      
+      downloadCSV(csv, "restaurants_partial.csv");
+      console.log(`Downloaded partial CSV with ${restaurants.size} restaurants`);
+    }
+    
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage({
         type: 'SCRAPING_STOPPED',
@@ -1030,14 +1046,30 @@ export async function scrapeReviewsOptimizedInjection(userConfig = {}) {
 
   // Handle stopped case
   if (shouldStop) {
-    console.log("Review scraping stopped by user");
+    console.log("Review scraping stopped by user - extracting partial results");
+    
+    // Extract reviews that were loaded so far
+    const partialReviews = extractReviews(pane, restaurantName);
+    
+    if (partialReviews.length > 0) {
+      // Generate and download CSV with partial results
+      const csv = generateReviewCSV(partialReviews);
+      const filename = (restaurantName && restaurantName !== 'Unknown Restaurant') 
+        ? `${sanitizeFilename(restaurantName)}_reviews_partial.csv` 
+        : 'reviews_partial.csv';
+      downloadCSV(csv, filename);
+      
+      console.log(`Downloaded ${partialReviews.length} partial reviews`);
+      window.lastCsv = { csv, length: partialReviews.length, filename };
+    }
+    
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage({
         type: 'SCRAPING_STOPPED',
-        data: { reviewCount: lastReviewCount }
+        data: { reviewCount: partialReviews.length }
       });
     }
-    return lastReviewCount;
+    return partialReviews.length;
   }
 
   // Extract reviews

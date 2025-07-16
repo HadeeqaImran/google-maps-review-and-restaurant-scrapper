@@ -270,7 +270,23 @@ export class RestaurantScraper {
       
       // Handle stopped case
       if (this.shouldStop) {
-        log("Restaurant extraction stopped by user");
+        log("Restaurant extraction stopped by user - downloading partial results");
+        
+        if (restaurants.size > 0) {
+          // Generate and download CSV with partial results
+          const rows = Array.from(restaurants.entries()).map(([url, data]) => [
+            data.name, 
+            data.starRating, 
+            data.reviewCount, 
+            url
+          ]);
+          const header = '"Name","Star Rating","Number of Reviews","Link"';
+          const csv = [header, ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join("\n");
+          
+          downloadCSV(csv, "restaurants_partial.csv");
+          log(`Downloaded partial CSV with ${restaurants.size} restaurants`);
+        }
+        
         this.sendStopped(restaurants.size);
         return restaurants.size;
       }

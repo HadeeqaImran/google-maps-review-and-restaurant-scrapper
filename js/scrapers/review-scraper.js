@@ -139,14 +139,14 @@ export class ReviewScraper {
       await wait(2000);
       
       // SIMPLIFIED APPROACH: Direct option search
-      const sortTexts = {
+      const sortTextsMapping = {
         'most-relevant': ['most relevant', 'relevance', 'relevant'],
         'newest': ['newest', 'recent', 'new', 'latest'],
         'highest-rating': ['highest', 'high rating', 'best', 'top rated'],
         'lowest-rating': ['lowest', 'low rating', 'worst', 'poor']
       };
       
-      const targetTexts = sortTexts[sortType] || sortTexts['most-relevant'];
+      const targetTextsForSort = sortTextsMapping[sortType] || sortTextsMapping['most-relevant'];
       
       // Search all clickable elements for direct sort options
       const allClickables = document.querySelectorAll('button, [role="button"], [tabindex="0"], [onclick]');
@@ -156,7 +156,7 @@ export class ReviewScraper {
         const ariaLabel = element.getAttribute('aria-label')?.toLowerCase() || '';
         const fullText = `${text} ${ariaLabel}`;
         
-        if (targetTexts.some(target => fullText.includes(target.toLowerCase()))) {
+        if (targetTextsForSort.some(target => fullText.includes(target.toLowerCase()))) {
           log(`Found direct sort option: "${text}"`, 'success');
           element.click();
           await wait(3000);
@@ -243,15 +243,15 @@ export class ReviewScraper {
       });
       
       // Map sort types to their text representations (more comprehensive)
-      const sortTexts = {
+      const sortTextsAlternate = {
         'most-relevant': ['most relevant', 'relevance', 'relevant'],
         'newest': ['newest', 'recent', 'new', 'latest'],
         'highest-rating': ['highest rating', 'high rating', 'highest', 'best'],
         'lowest-rating': ['lowest rating', 'low rating', 'lowest', 'worst']
       };
       
-      const targetTexts = sortTexts[sortType] || sortTexts['most-relevant'];
-      log(`Looking for sort option matching: ${targetTexts.join(', ')}`, 'info');
+      const targetTextsAlternate = sortTextsAlternate[sortType] || sortTextsAlternate['most-relevant'];
+      log(`Looking for sort option matching: ${targetTextsAlternate.join(', ')}`, 'info');
       
       // Enhanced dropdown option detection with more comprehensive selectors
       const optionSelectors = [
@@ -300,7 +300,7 @@ export class ReviewScraper {
         
         log(`  - Checking option: "${text}" (aria: "${ariaLabel}")`, 'info');
         
-        if (targetTexts.some(target => fullText.includes(target.toLowerCase()))) {
+                  if (targetTextsAlternate.some(target => fullText.includes(target.toLowerCase()))) {
           foundOption = option;
           log(`Found matching sort option: "${option.textContent}" | "${ariaLabel}"`, 'success');
           break;
@@ -542,7 +542,7 @@ export class ReviewScraper {
         
         // Check if button text changed
         const currentSortText = sortButton.textContent?.toLowerCase() || '';
-        const buttonTextChanged = targetTexts.some(target => currentSortText.includes(target.toLowerCase()));
+        const buttonTextChanged = targetTextsAlternate.some(target => currentSortText.includes(target.toLowerCase()));
         
         // Check if review order changed
         const currentReviews = Array.from(document.querySelectorAll('[data-review-id]')).slice(0, 5).map(el => el.getAttribute('data-review-id'));
@@ -609,7 +609,7 @@ export class ReviewScraper {
           // Look for parent containers or related elements
           let elementToTry = foundOption.parentElement;
           while (elementToTry && elementToTry !== document.body) {
-            if (elementToTry.click && elementToTry.textContent?.toLowerCase().includes(targetTexts[0])) {
+            if (elementToTry.click && elementToTry.textContent?.toLowerCase().includes(targetTextsAlternate[0])) {
               log(`Trying parent element: ${elementToTry.tagName}.${elementToTry.className}`, 'info');
               elementToTry.click();
               await wait(500);
@@ -913,9 +913,25 @@ export class ReviewScraper {
 
       // Handle stopped case
       if (this.shouldStop) {
-        log("Review scraping stopped by user");
-        this.sendStopped(lastReviewCount);
-        return lastReviewCount;
+        log("Review scraping stopped by user - extracting partial results");
+        
+        // Extract reviews that were loaded so far
+        const partialReviews = this.extractReviews(pane, restaurantName);
+        
+        if (partialReviews.length > 0) {
+          // Generate and download CSV with partial results
+          const csv = this.generateReviewCSV(partialReviews);
+          const filename = (restaurantName && restaurantName !== 'Unknown Restaurant') 
+            ? `${this.sanitizeFilename(restaurantName)}_reviews_partial.csv` 
+            : 'reviews_partial.csv';
+          this.downloadCSV(csv, filename);
+          
+          log(`Downloaded ${partialReviews.length} partial reviews`);
+          window.lastCsv = { csv, length: partialReviews.length, filename };
+        }
+        
+        this.sendStopped(partialReviews.length);
+        return partialReviews.length;
       }
 
       // Extract reviews
