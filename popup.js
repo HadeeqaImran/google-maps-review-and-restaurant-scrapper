@@ -63,7 +63,7 @@ const stopScraping = () => {
     showStopButton(false, 'review');
     showStopButton(false, 'restaurant');
     hideProgress();
-    setStatus('🛑 Scraping stopped by user', 'warning');
+    setStatus('Scraping stopped by user', 'warning');
   }
 };
 
@@ -93,19 +93,19 @@ const hideProgress = () => {
 };
 
 button.addEventListener('click', async () => {
-  setStatus('🔄 Extracting restaurants...', 'info');
+  setStatus('Extracting restaurants...', 'info');
   createProgressBar();
   syncConfig(); // Update config from UI
   
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   if (!tab.url.startsWith('http://') && !tab.url.startsWith('https://')) {
-    setStatus('⚠️ Switch to the Google Maps tab first.', 'warning');
+    setStatus('Switch to the Google Maps tab first.', 'warning');
     hideProgress();
     return;
   }
   if (!tab.url.includes('google.com/maps') && !tab.url.includes('google.co.jp/maps')) {
-    setStatus('⚠️ Not a Google Maps search page.', 'warning');
+    setStatus('Not a Google Maps search page.', 'warning');
     hideProgress();
     return;
   }
@@ -122,13 +122,13 @@ button.addEventListener('click', async () => {
       updateProgress(`${phase}: ${count} restaurants`, count > 0 ? 50 : 10);
     } else if (message.type === 'RESTAURANT_COMPLETE' && sender.tab.id === tab.id) {
       const { count } = message.data;
-      setStatus(`✅ Extracted ${count} restaurants!`, 'success');
+      setStatus(`Extracted ${count} restaurants!`, 'success');
       hideProgress();
       showStopButton(false, 'restaurant');
       isScrapingActive = false;
       chrome.runtime.onMessage.removeListener(progressListener);
     } else if (message.type === 'SCRAPING_STOPPED' && sender.tab.id === tab.id) {
-      setStatus('🛑 Restaurant extraction stopped', 'warning');
+      setStatus('Restaurant extraction stopped', 'warning');
       hideProgress();
       showStopButton(false, 'restaurant');
       isScrapingActive = false;
@@ -145,7 +145,7 @@ button.addEventListener('click', async () => {
   }, (injectionResults) => {
     if (chrome.runtime.lastError) {
       console.error('Injection failed:', chrome.runtime.lastError);
-      setStatus('❌ Injection error; see console.', 'error');
+      setStatus('Injection error; see console.', 'error');
       hideProgress();
       showStopButton(false, 'restaurant');
       isScrapingActive = false;
@@ -155,7 +155,7 @@ button.addEventListener('click', async () => {
 });
 
 reviewsBtn.addEventListener('click', async () => {
-  setStatus('🔄 Scraping reviews...', 'info');
+  setStatus('Scraping reviews...', 'info');
   pause.style.display = 'none';
   createProgressBar();
   syncConfig(); // Update config from UI
@@ -180,14 +180,14 @@ reviewsBtn.addEventListener('click', async () => {
       updateProgress(`${phase}: ${reviewCount} reviews found`, percentage);
     } else if (message.type === 'SCRAPING_COMPLETE' && sender.tab.id === tab.id) {
       const { reviewCount } = message.data;
-      setStatus(`✅ Scraped ${reviewCount} reviews successfully!`, 'success');
+      setStatus(`Scraped ${reviewCount} reviews successfully!`, 'success');
       hideProgress();
       showStopButton(false, 'review');
       isScrapingActive = false;
       if (window.lastCsv) pause.style.display = 'block';
       chrome.runtime.onMessage.removeListener(progressListener);
     } else if (message.type === 'SCRAPING_STOPPED' && sender.tab.id === tab.id) {
-      setStatus('🛑 Review scraping stopped', 'warning');
+      setStatus('Review scraping stopped', 'warning');
       hideProgress();
       showStopButton(false, 'review');
       isScrapingActive = false;
@@ -205,7 +205,7 @@ reviewsBtn.addEventListener('click', async () => {
   }, () => {
     if (chrome.runtime.lastError) {
       console.error(chrome.runtime.lastError);
-      setStatus('❌ Review scraping failed', 'error');
+      setStatus('Review scraping failed', 'error');
       hideProgress();
       showStopButton(false, 'review');
       isScrapingActive = false;
@@ -223,9 +223,9 @@ pause.addEventListener('click', () => {
     a.download = "restaurant_reviews.csv";
     a.click();
     URL.revokeObjectURL(dlUrl);
-    setStatus(`📁 Downloaded ${window.lastCsv.length} reviews`, 'success');
+    setStatus(`Downloaded ${window.lastCsv.length} reviews`, 'success');
   } else {
-    setStatus('⚠️ No data to download. Run scraper first.', 'warning');
+    setStatus('No data to download. Run scraper first.', 'warning');
   }
 });
 
@@ -249,7 +249,7 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   const messageListener = (message, sender, sendResponse) => {
     if (message.type === 'STOP_SCRAPING') {
       shouldStop = true;
-      console.log('🛑 Stop signal received');
+      console.log('Stop signal received');
     }
   };
   
@@ -272,7 +272,7 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
 
   const pane = document.querySelector('[role="feed"]');
   if (!pane) {
-    console.error("❌ Results pane not found - make sure you're on a Google Maps search page");
+    console.error("Results pane not found - make sure you're on a Google Maps search page");
     return;
   }
 
@@ -301,13 +301,13 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
     
     // Check for stop signal
     if (shouldStop) {
-      console.log("🛑 Scraping stopped by user");
+      console.log("Scraping stopped by user");
       break;
     }
     
     const newHeight = pane.scrollHeight;
     if (newHeight > lastHeight) {
-      console.log(`✅ Height increased: ${lastHeight} → ${newHeight}`);
+      console.log(`Height increased: ${lastHeight} → ${newHeight}`);
       lastHeight = newHeight;
       noChangeCount = 0;
       
@@ -355,7 +355,7 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   
   // Handle stopped case
   if (shouldStop) {
-    console.log("🛑 Restaurant extraction stopped by user");
+    console.log("Restaurant extraction stopped by user");
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage({
         type: 'SCRAPING_STOPPED',
@@ -366,7 +366,7 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   }
   
   if (restaurants.size === 0) {
-    console.warn("❌ No restaurants found - check selectors");
+    console.warn("No restaurants found - check selectors");
     return;
   }
 
@@ -376,7 +376,7 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   const csv = [header, ...rows.map(([n,u]) => `"${n}","${u}"`)].join("\n");
   
   downloadCSV(csv, "restaurants.csv");
-  console.log(`✅ Downloaded CSV with ${restaurants.size} restaurants`);
+  console.log(`Downloaded CSV with ${restaurants.size} restaurants`);
 
   // Send completion message
   if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -407,7 +407,7 @@ async function scrapeReviewsOptimized(userConfig = {}) {
   const messageListener = (message, sender, sendResponse) => {
     if (message.type === 'STOP_SCRAPING') {
       shouldStop = true;
-      console.log('🛑 Stop signal received');
+      console.log('Stop signal received');
     }
   };
   
@@ -617,11 +617,11 @@ async function scrapeReviewsOptimized(userConfig = {}) {
 
   const pane = findReviewsPane();
   if (!pane) {
-    console.error("❌ Reviews pane not found");
+    console.error("Reviews pane not found");
     return;
   }
 
-  console.log("✅ Reviews pane located");
+  console.log("Reviews pane located");
 
   const scrollableElement = findScrollableElement(pane);
   console.log(`📜 Scrollable element: ${scrollableElement === window ? 'window' : 'custom element'}`);
@@ -647,7 +647,7 @@ async function scrapeReviewsOptimized(userConfig = {}) {
 
     // Check for stop signal
     if (shouldStop) {
-      console.log("🛑 Review scraping stopped by user");
+      console.log("Review scraping stopped by user");
       break;
     }
 
@@ -676,12 +676,12 @@ async function scrapeReviewsOptimized(userConfig = {}) {
 
     // Exit conditions
     if (currentReviewCount >= CONFIG.MAX_REVIEWS) {
-      console.log(`🎯 Max reviews reached: ${CONFIG.MAX_REVIEWS}`);
+      console.log(`Max reviews reached: ${CONFIG.MAX_REVIEWS}`);
       break;
     }
 
     if (noChangeCount >= CONFIG.NO_CHANGE_LIMIT) {
-      console.log("🏁 No new content detected, stopping");
+      console.log("No new content detected, stopping");
       break;
     }
   }
@@ -701,7 +701,7 @@ async function scrapeReviewsOptimized(userConfig = {}) {
 
   // Handle stopped case
   if (shouldStop) {
-    console.log("🛑 Review scraping stopped by user");
+    console.log("Review scraping stopped by user");
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage({
         type: 'SCRAPING_STOPPED',
@@ -715,7 +715,7 @@ async function scrapeReviewsOptimized(userConfig = {}) {
   const reviews = extractReviews(pane, restaurantName);
   
   if (reviews.length === 0) {
-    console.warn("❌ No reviews extracted");
+    console.warn("No reviews extracted");
     // Send completion message even if no reviews
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage({
@@ -731,7 +731,7 @@ async function scrapeReviewsOptimized(userConfig = {}) {
   const filename = `${sanitizeFilename(restaurantName)}_reviews.csv`;
   downloadCSV(csv, filename);
 
-  console.log(`✅ Downloaded ${reviews.length} reviews`);
+  console.log(`Downloaded ${reviews.length} reviews`);
   window.lastCsv = { csv, length: reviews.length };
 
   // Send completion message
