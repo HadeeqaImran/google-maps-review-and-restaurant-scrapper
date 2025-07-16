@@ -6,8 +6,10 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
   console.log("🔍 Optimized restaurant scraping started");
   
   const CONFIG = {
-    MAX_NO_CHANGE: 3,
-    SCROLL_DELAY: userConfig?.SCROLL_TIMEOUT || 600,
+    MAX_RESTAURANTS: userConfig?.MAX_RESTAURANTS || 500,
+    MAX_SCROLL_ATTEMPTS: userConfig?.MAX_SCROLL_ATTEMPTS || 10,
+    SCROLL_DELAY: userConfig?.RESTAURANT_SCROLL_DELAY || 600,
+    MAX_NO_CHANGE: userConfig?.MAX_NO_CHANGE || 3,
     INTERSECTION_THRESHOLD: 0.1
   };
 
@@ -64,13 +66,13 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
     });
   }
 
-  // Simplified but effective scrolling loop
-  while (noChangeCount < CONFIG.MAX_NO_CHANGE && !shouldStop) {
+  // Enhanced scrolling loop with configurable limits
+  while (noChangeCount < CONFIG.MAX_NO_CHANGE && scrollAttempts < CONFIG.MAX_SCROLL_ATTEMPTS && !shouldStop) {
     scrollAttempts++;
     
     // Scroll to bottom
     pane.scrollTo(0, pane.scrollHeight);
-    console.log(`Scroll attempt ${scrollAttempts} (height: ${lastHeight})`);
+    console.log(`Scroll attempt ${scrollAttempts}/${CONFIG.MAX_SCROLL_ATTEMPTS} (height: ${lastHeight})`);
     
     // Wait for content to load
     await wait(CONFIG.SCROLL_DELAY);
@@ -89,6 +91,19 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
       
       // Count current restaurants and send progress
       const currentRestaurants = pane.querySelectorAll('a.hfpxzc[href*="/maps/place/"]').length;
+      
+      // Check if we've reached the maximum restaurants limit
+      if (currentRestaurants >= CONFIG.MAX_RESTAURANTS) {
+        console.log(`Maximum restaurants limit reached: ${CONFIG.MAX_RESTAURANTS}`);
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+          chrome.runtime.sendMessage({
+            type: 'RESTAURANT_PROGRESS',
+            data: { phase: 'Maximum restaurants reached', count: currentRestaurants }
+          });
+        }
+        break;
+      }
+      
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage({
           type: 'RESTAURANT_PROGRESS',
@@ -108,6 +123,11 @@ export async function scrapeAndDownloadOptimizedInjection(userConfig = {}) {
       console.log("End banner detected");
       break;
     }
+  }
+
+  // Log completion reason
+  if (scrollAttempts >= CONFIG.MAX_SCROLL_ATTEMPTS) {
+    console.log(`Stopped after ${CONFIG.MAX_SCROLL_ATTEMPTS} scroll attempts`);
   }
 
   // Enhanced restaurant data extraction

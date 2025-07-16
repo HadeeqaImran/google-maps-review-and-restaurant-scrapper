@@ -11,15 +11,24 @@ document.body.appendChild(progressContainer);
 
 // Configuration object for easy tuning - gets updated by UI
 let CONFIG = {
+  // Review settings
   MAX_REVIEWS: 2000,
-  SCROLL_TIMEOUT: 800, // Reduced from 1500ms
-  NO_CHANGE_LIMIT: 15, // Reduced from 20
-  BATCH_SIZE: 50, // Process reviews in batches
-  INTERSECTION_THRESHOLD: 0.1
+  SCROLL_TIMEOUT: 800,
+  NO_CHANGE_LIMIT: 15,
+  BATCH_SIZE: 50,
+  INTERSECTION_THRESHOLD: 0.1,
+  
+  // Restaurant settings
+  MAX_RESTAURANTS: 2000,
+  RESTAURANT_SCROLL_TIMEOUT: 800,
+  MAX_SCROLL_ATTEMPTS: 10,
+  RESTAURANT_SCROLL_DELAY: 600,
+  MAX_NO_CHANGE: 3
 };
 
 // Sync config with UI settings
 const syncConfig = () => {
+  // Review settings
   const maxReviews = document.getElementById('max-reviews')?.value;
   const scrollSpeed = document.getElementById('scroll-speed')?.value;
   
@@ -27,6 +36,17 @@ const syncConfig = () => {
   if (scrollSpeed) {
     const speeds = { fast: 600, normal: 800, slow: 1200 };
     CONFIG.SCROLL_TIMEOUT = speeds[scrollSpeed] || 800;
+  }
+
+  // Restaurant settings
+  const maxRestaurants = document.getElementById('max-restaurants')?.value;
+  const restaurantScrollSpeed = document.getElementById('restaurant-scroll-speed')?.value;
+  
+  if (maxRestaurants) CONFIG.MAX_RESTAURANTS = parseInt(maxRestaurants);
+  if (restaurantScrollSpeed) {
+    const speeds = { fast: 600, normal: 800, slow: 1200 };
+    CONFIG.RESTAURANT_SCROLL_TIMEOUT = speeds[restaurantScrollSpeed] || 800;
+    CONFIG.RESTAURANT_SCROLL_DELAY = speeds[restaurantScrollSpeed] || 800;
   }
 };
 
@@ -258,8 +278,10 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   console.log("🔍 Optimized restaurant scraping started");
   
   const CONFIG = {
-    MAX_NO_CHANGE: 3,
-    SCROLL_DELAY: userConfig?.SCROLL_TIMEOUT || 600,
+    MAX_RESTAURANTS: userConfig?.MAX_RESTAURANTS || 500,
+    MAX_SCROLL_ATTEMPTS: userConfig?.MAX_SCROLL_ATTEMPTS || 10,
+    SCROLL_DELAY: userConfig?.RESTAURANT_SCROLL_DELAY || 600,
+    MAX_NO_CHANGE: userConfig?.MAX_NO_CHANGE || 3,
     INTERSECTION_THRESHOLD: 0.1
   };
 
@@ -316,13 +338,13 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
     });
   }
 
-  // Simplified but effective scrolling loop
-  while (noChangeCount < CONFIG.MAX_NO_CHANGE && !shouldStop) {
+  // Enhanced scrolling loop with configurable limits
+  while (noChangeCount < CONFIG.MAX_NO_CHANGE && scrollAttempts < CONFIG.MAX_SCROLL_ATTEMPTS && !shouldStop) {
     scrollAttempts++;
     
     // Scroll to bottom
     pane.scrollTo(0, pane.scrollHeight);
-    console.log(`Scroll attempt ${scrollAttempts} (height: ${lastHeight})`);
+    console.log(`Scroll attempt ${scrollAttempts}/${CONFIG.MAX_SCROLL_ATTEMPTS} (height: ${lastHeight})`);
     
     // Wait for content to load
     await wait(CONFIG.SCROLL_DELAY);
@@ -341,6 +363,19 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
       
       // Count current restaurants and send progress
       const currentRestaurants = pane.querySelectorAll('a.hfpxzc[href*="/maps/place/"]').length;
+      
+      // Check if we've reached the maximum restaurants limit
+      if (currentRestaurants >= CONFIG.MAX_RESTAURANTS) {
+        console.log(`Maximum restaurants limit reached: ${CONFIG.MAX_RESTAURANTS}`);
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+          chrome.runtime.sendMessage({
+            type: 'RESTAURANT_PROGRESS',
+            data: { phase: 'Maximum restaurants reached', count: currentRestaurants }
+          });
+        }
+        break;
+      }
+      
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage({
           type: 'RESTAURANT_PROGRESS',
@@ -360,6 +395,11 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
       console.log("🏁 End banner detected");
       break;
     }
+  }
+
+  // Log completion reason
+  if (scrollAttempts >= CONFIG.MAX_SCROLL_ATTEMPTS) {
+    console.log(`Stopped after ${CONFIG.MAX_SCROLL_ATTEMPTS} scroll attempts`);
   }
 
   // Enhanced restaurant data extraction
@@ -973,34 +1013,64 @@ async function scrapeReviewsOptimized(userConfig = {}) {
 
 // Initialize UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  // Make collapsible sections work
-  const coll = document.querySelector(".collapsible");
-  const content = document.querySelector(".content");
+  // Make collapsible sections work - Reviews section
+  const reviewsColl = document.querySelector(".collapsible:not(.restaurant-settings)");
+  const reviewsContent = document.querySelector(".content:not(.restaurant-content)");
   
-  if (coll && content) {
-    coll.addEventListener("click", function() {
+  if (reviewsColl && reviewsContent) {
+    reviewsColl.addEventListener("click", function() {
       this.classList.toggle("active");
-      content.classList.toggle("active");
+      reviewsContent.classList.toggle("active");
+    });
+  }
+
+  // Make collapsible sections work - Restaurant settings section
+  const restaurantColl = document.querySelector(".collapsible.restaurant-settings");
+  const restaurantContent = document.querySelector(".content.restaurant-content");
+  
+  if (restaurantColl && restaurantContent) {
+    restaurantColl.addEventListener("click", function() {
+      this.classList.toggle("active");
+      restaurantContent.classList.toggle("active");
     });
   }
   
-  // Update CONFIG when settings change
+  // Update CONFIG when review settings change
   const maxReviewsInput = document.getElementById('max-reviews');
   if (maxReviewsInput) {
     maxReviewsInput.addEventListener('change', function() {
-      window.CONFIG = window.CONFIG || {};
-      window.CONFIG.MAX_REVIEWS = parseInt(this.value);
+      CONFIG.MAX_REVIEWS = parseInt(this.value);
     });
   }
   
   const scrollSpeedSelect = document.getElementById('scroll-speed');
   if (scrollSpeedSelect) {
     scrollSpeedSelect.addEventListener('change', function() {
-      window.CONFIG = window.CONFIG || {};
       const speeds = { fast: 600, normal: 800, slow: 1200 };
-      window.CONFIG.SCROLL_TIMEOUT = speeds[this.value];
+      CONFIG.SCROLL_TIMEOUT = speeds[this.value];
     });
   }
+  
+
+
+  // Update CONFIG when restaurant settings change
+  const maxRestaurantsInput = document.getElementById('max-restaurants');
+  if (maxRestaurantsInput) {
+    maxRestaurantsInput.addEventListener('input', function() {
+      CONFIG.MAX_RESTAURANTS = parseInt(this.value);
+    });
+  }
+  
+  const restaurantScrollSpeedSelect = document.getElementById('restaurant-scroll-speed');
+  if (restaurantScrollSpeedSelect) {
+    restaurantScrollSpeedSelect.addEventListener('change', function() {
+      const speeds = { fast: 600, normal: 800, slow: 1200 };
+      CONFIG.RESTAURANT_SCROLL_TIMEOUT = speeds[this.value];
+      CONFIG.RESTAURANT_SCROLL_DELAY = speeds[this.value];
+    });
+  }
+  
+
 
   // Initialize stop buttons
   const stopButton = document.getElementById('stop-scraping');

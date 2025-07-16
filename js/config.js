@@ -2,18 +2,25 @@
 export class Config {
   constructor() {
     this.settings = {
+      // Review settings
       MAX_REVIEWS: 2000,
       SCROLL_TIMEOUT: 800,
       NO_CHANGE_LIMIT: 15,
       BATCH_SIZE: 50,
       INTERSECTION_THRESHOLD: 0.1,
-      MAX_NO_CHANGE: 3,
-      SCROLL_DELAY: 600
+      
+      // Restaurant settings
+      MAX_RESTAURANTS: 2000,
+      RESTAURANT_SCROLL_TIMEOUT: 800,
+      MAX_SCROLL_ATTEMPTS: 10,
+      RESTAURANT_SCROLL_DELAY: 600,
+      MAX_NO_CHANGE: 3
     };
   }
 
   // Update configuration from UI elements
   syncFromUI() {
+    // Review settings
     const maxReviews = document.getElementById('max-reviews')?.value;
     const scrollSpeed = document.getElementById('scroll-speed')?.value;
     
@@ -24,7 +31,20 @@ export class Config {
     if (scrollSpeed) {
       const speeds = { fast: 600, normal: 800, slow: 1200 };
       this.settings.SCROLL_TIMEOUT = speeds[scrollSpeed] || 800;
-      this.settings.SCROLL_DELAY = speeds[scrollSpeed] || 600;
+    }
+
+    // Restaurant settings
+    const maxRestaurants = document.getElementById('max-restaurants')?.value;
+    const restaurantScrollSpeed = document.getElementById('restaurant-scroll-speed')?.value;
+    
+    if (maxRestaurants) {
+      this.settings.MAX_RESTAURANTS = parseInt(maxRestaurants);
+    }
+    
+    if (restaurantScrollSpeed) {
+      const speeds = { fast: 600, normal: 800, slow: 1200 };
+      this.settings.RESTAURANT_SCROLL_TIMEOUT = speeds[restaurantScrollSpeed] || 800;
+      this.settings.RESTAURANT_SCROLL_DELAY = speeds[restaurantScrollSpeed] || 800;
     }
   }
 
@@ -43,13 +63,19 @@ export class Config {
   // Reset to defaults
   reset() {
     this.settings = {
+      // Review settings
       MAX_REVIEWS: 2000,
       SCROLL_TIMEOUT: 800,
       NO_CHANGE_LIMIT: 15,
       BATCH_SIZE: 50,
       INTERSECTION_THRESHOLD: 0.1,
-      MAX_NO_CHANGE: 3,
-      SCROLL_DELAY: 600
+      
+      // Restaurant settings
+      MAX_RESTAURANTS: 2000,
+      RESTAURANT_SCROLL_TIMEOUT: 800,
+      MAX_SCROLL_ATTEMPTS: 10,
+      RESTAURANT_SCROLL_DELAY: 600,
+      MAX_NO_CHANGE: 3
     };
   }
 } 

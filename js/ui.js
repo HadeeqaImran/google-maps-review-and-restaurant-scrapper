@@ -66,13 +66,25 @@ export class UI {
 
   // Initialize collapsible sections
   initializeCollapsible() {
-    const coll = document.querySelector(".collapsible");
-    const content = document.querySelector(".content");
+    // Initialize review settings collapsible
+    const reviewsColl = document.querySelector(".collapsible:not(.restaurant-settings)");
+    const reviewsContent = document.querySelector(".content:not(.restaurant-content)");
     
-    if (coll && content) {
-      coll.addEventListener("click", function() {
+    if (reviewsColl && reviewsContent) {
+      reviewsColl.addEventListener("click", function() {
         this.classList.toggle("active");
-        content.classList.toggle("active");
+        reviewsContent.classList.toggle("active");
+      });
+    }
+
+    // Initialize restaurant settings collapsible
+    const restaurantColl = document.querySelector(".collapsible.restaurant-settings");
+    const restaurantContent = document.querySelector(".content.restaurant-content");
+    
+    if (restaurantColl && restaurantContent) {
+      restaurantColl.addEventListener("click", function() {
+        this.classList.toggle("active");
+        restaurantContent.classList.toggle("active");
       });
     }
   }

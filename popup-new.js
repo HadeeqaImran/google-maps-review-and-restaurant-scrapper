@@ -57,6 +57,7 @@ class RestaurantScraperApp {
   }
 
   setupSettingsListeners() {
+    // Review settings
     const maxReviewsInput = document.getElementById('max-reviews');
     if (maxReviewsInput) {
       maxReviewsInput.addEventListener('change', (e) => {
@@ -70,7 +71,31 @@ class RestaurantScraperApp {
         const speeds = { fast: 600, normal: 800, slow: 1200 };
         const speed = speeds[e.target.value] || 800;
         this.config.set('SCROLL_TIMEOUT', speed);
-        this.config.set('SCROLL_DELAY', speed);
+      });
+    }
+
+    // Restaurant settings
+    const maxRestaurantsInput = document.getElementById('max-restaurants');
+    if (maxRestaurantsInput) {
+      maxRestaurantsInput.addEventListener('change', (e) => {
+        this.config.set('MAX_RESTAURANTS', parseInt(e.target.value));
+      });
+    }
+    
+    const restaurantScrollSpeedSelect = document.getElementById('restaurant-scroll-speed');
+    if (restaurantScrollSpeedSelect) {
+      restaurantScrollSpeedSelect.addEventListener('change', (e) => {
+        const speeds = { fast: 600, normal: 800, slow: 1200 };
+        const speed = speeds[e.target.value] || 800;
+        this.config.set('RESTAURANT_SCROLL_TIMEOUT', speed);
+        this.config.set('RESTAURANT_SCROLL_DELAY', speed);
+      });
+    }
+    
+    const maxScrollAttemptsSelect = document.getElementById('max-scroll-attempts');
+    if (maxScrollAttemptsSelect) {
+      maxScrollAttemptsSelect.addEventListener('change', (e) => {
+        this.config.set('MAX_SCROLL_ATTEMPTS', parseInt(e.target.value));
       });
     }
   }

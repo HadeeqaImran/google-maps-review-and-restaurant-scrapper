@@ -65,19 +65,21 @@ export class RestaurantScraper {
     let noChangeCount = 0;
     let scrollAttempts = 0;
     const maxNoChange = this.config.MAX_NO_CHANGE || 3;
+    const maxScrollAttempts = this.config.MAX_SCROLL_ATTEMPTS || 10;
+    const maxRestaurants = this.config.MAX_RESTAURANTS || 500;
 
     // Send initial progress
     this.sendProgress('Scrolling to load restaurants', 0);
 
-    while (noChangeCount < maxNoChange && !this.shouldStop) {
+    while (noChangeCount < maxNoChange && scrollAttempts < maxScrollAttempts && !this.shouldStop) {
       scrollAttempts++;
       
       // Scroll to bottom
       pane.scrollTo(0, pane.scrollHeight);
-      log(`Scroll attempt ${scrollAttempts} (height: ${lastHeight})`);
+      log(`Scroll attempt ${scrollAttempts}/${maxScrollAttempts} (height: ${lastHeight})`);
       
       // Wait for content to load
-      await wait(this.config.SCROLL_DELAY || 600);
+      await wait(this.config.RESTAURANT_SCROLL_DELAY || 600);
       
       // Check for stop signal
       if (this.shouldStop) {
@@ -93,6 +95,14 @@ export class RestaurantScraper {
         
         // Count current restaurants and send progress
         const currentRestaurants = this.countRestaurants(pane);
+        
+        // Check if we've reached the maximum restaurants limit
+        if (currentRestaurants >= maxRestaurants) {
+          log(`Maximum restaurants limit reached: ${maxRestaurants}`, 'success');
+          this.sendProgress('Maximum restaurants reached', currentRestaurants);
+          break;
+        }
+        
         this.sendProgress('Loading restaurants', currentRestaurants);
         
         // Wait for new content to render
@@ -107,6 +117,11 @@ export class RestaurantScraper {
         log("End banner detected", 'success');
         break;
       }
+    }
+
+    // Log completion reason
+    if (scrollAttempts >= maxScrollAttempts) {
+      log(`Stopped after ${maxScrollAttempts} scroll attempts`, 'info');
     }
 
     return !this.shouldStop;

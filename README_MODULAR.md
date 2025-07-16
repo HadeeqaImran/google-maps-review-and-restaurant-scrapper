@@ -29,10 +29,11 @@ restaurants-scrapper/
 Manages all extension configuration and settings.
 
 **Features:**
-- Centralized configuration management
-- UI synchronization
+- Centralized configuration management for both reviews and restaurants
+- UI synchronization for all settings
 - Runtime setting updates
 - Default value management
+- Separate configuration sections for review and restaurant extraction
 
 **Key Methods:**
 - `syncFromUI()` - Updates config from UI elements
@@ -48,7 +49,8 @@ Handles all user interface interactions and DOM manipulation.
 - Progress bar creation and updates
 - Button state management
 - Page validation
-- Collapsible sections
+- Multiple collapsible sections (Reviews & Restaurant settings)
+- Advanced settings UI for both extraction types
 
 **Key Methods:**
 - `setStatus(message, type)` - Updates status with color coding
@@ -113,6 +115,11 @@ Handles restaurant extraction from Google Maps search results.
 - Number of Reviews: Total review count (e.g., "123" or "N/A")
 - Link: Google Maps URL
 
+**Advanced Settings:**
+- Maximum Restaurants: Stop extraction after reaching this limit (50-2000)
+- Scroll Speed: How fast to scroll through results (Fast/Normal/Slow)
+- Max Scroll Attempts: How many times to try scrolling before giving up (5-20)
+
 ### 6. **Review Scraper Module** (`js/scrapers/review-scraper.js`)
 Handles review extraction from restaurant pages.
 
@@ -164,13 +171,15 @@ this.chrome = new ChromeUtils();
 
 ### 2. **Restaurant Extraction Flow**
 ```
+User configures restaurant settings (max restaurants, scroll speed, etc.)
+  ↓
 User clicks "Extract Restaurants"
   ↓
 UI validates Google Maps search page
   ↓
-Chrome utils executes restaurant scraper
+Chrome utils executes restaurant scraper with user settings
   ↓
-Restaurant scraper scrolls and loads all results
+Restaurant scraper scrolls and loads results (respecting limits)
   ↓
 Extracts name, star rating, review count, and URL for each restaurant
   ↓
@@ -178,7 +187,7 @@ Restaurant scraper sends progress updates
   ↓
 UI updates progress bar in real-time
   ↓
-Enhanced CSV downloaded with 4 columns
+Enhanced CSV downloaded with 4 columns (stops at user-defined limit)
 ```
 
 ### 3. **Review Scraping Flow**
