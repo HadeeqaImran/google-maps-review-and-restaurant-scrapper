@@ -109,6 +109,13 @@ button.addEventListener('click', async () => {
     hideProgress();
     return;
   }
+  
+  // Check if we're on a search results page (not a specific place page)
+  if (tab.url.includes('/maps/place/') || (!tab.url.includes('/search/') && !tab.url.includes('search?') && !tab.url.includes('data='))) {
+    setStatus('Open a restaurants search page first - search for restaurants in Google Maps.', 'warning');
+    hideProgress();
+    return;
+  }
 
   // Set scraping state
   isScrapingActive = true;
@@ -123,6 +130,13 @@ button.addEventListener('click', async () => {
     } else if (message.type === 'RESTAURANT_COMPLETE' && sender.tab.id === tab.id) {
       const { count } = message.data;
       setStatus(`Extracted ${count} restaurants!`, 'success');
+      hideProgress();
+      showStopButton(false, 'restaurant');
+      isScrapingActive = false;
+      chrome.runtime.onMessage.removeListener(progressListener);
+    } else if (message.type === 'RESTAURANT_ERROR' && sender.tab.id === tab.id) {
+      const { error } = message.data;
+      setStatus(error, 'error');
       hideProgress();
       showStopButton(false, 'restaurant');
       isScrapingActive = false;
@@ -185,6 +199,13 @@ reviewsBtn.addEventListener('click', async () => {
       showStopButton(false, 'review');
       isScrapingActive = false;
       if (window.lastCsv) pause.style.display = 'block';
+      chrome.runtime.onMessage.removeListener(progressListener);
+    } else if (message.type === 'REVIEW_ERROR' && sender.tab.id === tab.id) {
+      const { error } = message.data;
+      setStatus(error, 'error');
+      hideProgress();
+      showStopButton(false, 'review');
+      isScrapingActive = false;
       chrome.runtime.onMessage.removeListener(progressListener);
     } else if (message.type === 'SCRAPING_STOPPED' && sender.tab.id === tab.id) {
       setStatus('Review scraping stopped', 'warning');
@@ -273,6 +294,13 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   const pane = document.querySelector('[role="feed"]');
   if (!pane) {
     console.error("Results pane not found - make sure you're on a Google Maps search page");
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.runtime.sendMessage({
+        type: 'RESTAURANT_ERROR',
+        data: { error: 'Results pane not found - make sure you\'re on a Google Maps search page' }
+      });
+    }
     return;
   }
 
@@ -367,6 +395,13 @@ async function scrapeAndDownloadOptimized(userConfig = {}) {
   
   if (restaurants.size === 0) {
     console.warn("No restaurants found - check selectors");
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.runtime.sendMessage({
+        type: 'RESTAURANT_ERROR',
+        data: { error: 'No restaurants found - make sure you\'re on a Google Maps search results page' }
+      });
+    }
     return;
   }
 
@@ -442,53 +477,131 @@ async function scrapeReviewsOptimized(userConfig = {}) {
   const clickReviewsTab = async () => {
     const labelKeywords = ['Review', 'Reviews', 'クチコミ', 'Reseñas', 'Avis', 'Rezension'];
     
-    // Try specific selector first
-    let reviewsTab = document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div:nth-child(3) > div > div > button:nth-child(3)");
+    console.log('🔍 Looking for Reviews tab...');
     
-    // Fallback to keyword search
-    if (!reviewsTab) {
-      const buttons = document.querySelectorAll('button[role="tab"]');
-      for (const button of buttons) {
-        const label = button.getAttribute('aria-label') || button.textContent || '';
-        if (labelKeywords.some(keyword => label.includes(keyword))) {
-          reviewsTab = button;
-          break;
+    // Method 1: Try multiple specific selectors for different layouts
+    const specificSelectors = [
+      "#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div:nth-child(3) > div > div > button:nth-child(2)",
+      "#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div:nth-child(3) > div > div > button:nth-child(3)",
+      "button[role='tab'][aria-selected='false']"
+    ];
+    
+    for (const selector of specificSelectors) {
+      const button = document.querySelector(selector);
+      if (button) {
+        const text = button.textContent || button.getAttribute('aria-label') || '';
+        if (labelKeywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()))) {
+          console.log(`✅ Found Reviews tab with selector: ${selector}`);
+          button.click();
+          await wait(2000);
+          return true;
         }
       }
     }
     
-    if (reviewsTab) {
-      console.log('🎯 Reviews tab found, clicking...');
-      reviewsTab.click();
-      await wait(1500);
-      return true;
+    // Method 2: Search all tab buttons more carefully
+    const allButtons = document.querySelectorAll('button[role="tab"], button[data-tab-index], .tab button, [role="tablist"] button');
+    console.log(`🔍 Found ${allButtons.length} potential tab buttons`);
+    
+    for (const button of allButtons) {
+      const text = button.textContent || '';
+      const label = button.getAttribute('aria-label') || '';
+      const fullText = `${text} ${label}`.toLowerCase();
+      
+      console.log(`🔍 Checking button: "${text.trim()}" / "${label}"`);
+      
+      if (labelKeywords.some(keyword => fullText.includes(keyword.toLowerCase()))) {
+        console.log(`✅ Found Reviews tab: "${text.trim()}"`);
+        button.click();
+        await wait(2000);
+        return true;
+      }
     }
     
-    console.log('⚠️ Reviews tab not found, proceeding anyway');
+    // Method 3: Look for the Reviews tab by checking for non-active tabs
+    const tabs = document.querySelectorAll('button[role="tab"]');
+    for (const tab of tabs) {
+      const isSelected = tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('selected');
+      if (!isSelected) {
+        const text = (tab.textContent || '').toLowerCase();
+        if (labelKeywords.some(keyword => text.includes(keyword.toLowerCase()))) {
+          console.log(`✅ Found non-active Reviews tab: "${tab.textContent}"`);
+          tab.click();
+          await wait(2000);
+          return true;
+        }
+      }
+    }
+    
+    console.log('⚠️ Reviews tab not found after exhaustive search, proceeding anyway');
     return false;
   };
 
   const findReviewsPane = () => {
+    console.log('🔍 Looking for reviews pane...');
+    
+    // First check if we have any reviews at all
+    const reviewElements = document.querySelectorAll('[data-review-id], .jftiEf, .MyEned, .wiI7pd');
+    console.log(`🔍 Found ${reviewElements.length} potential review elements`);
+    
+    if (reviewElements.length === 0) {
+      console.log('❌ No review elements found - this place might not have reviews');
+      return null;
+    }
+    
     const selectors = [
       '#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde > div:nth-child(9)',
-      '[role="feed"]'
+      '[role="feed"]',
+      '.m6QErb.DxyBCb',
+      '.review-dialog-list',
+      '.section-scrollbox'
     ];
     
     for (const selector of selectors) {
       const element = document.querySelector(selector);
-      if (element && element.querySelector('[data-review-id]')) {
-        return element;
+      if (element) {
+        const hasReviews = element.querySelector('[data-review-id], .jftiEf, .MyEned');
+        console.log(`🔍 Checking selector "${selector}": ${hasReviews ? 'Found reviews' : 'No reviews'}`);
+        if (hasReviews) {
+          console.log(`✅ Found reviews pane with selector: ${selector}`);
+          return element;
+        }
       }
     }
     
-    // Last resort: find by review elements
-    const firstReview = document.querySelector('[data-review-id]');
+    // Enhanced last resort: find by review elements and traverse up
+    const firstReview = document.querySelector('[data-review-id], .jftiEf');
     if (firstReview) {
-      return firstReview.closest('[role="feed"]') || 
-             firstReview.closest('div[jsrenderer]') ||
-             firstReview.parentElement.parentElement;
+      console.log('🔍 Found review element, traversing up to find scrollable container...');
+      
+      // Try to find scrollable parent
+      let parent = firstReview;
+      while (parent && parent !== document.body) {
+        parent = parent.parentElement;
+        if (parent && (parent.scrollHeight > parent.clientHeight + 10)) {
+          console.log('✅ Found scrollable reviews container');
+          return parent;
+        }
+      }
+      
+      // Fallback to common parent containers
+      const containers = [
+        firstReview.closest('[role="feed"]'),
+        firstReview.closest('div[jsrenderer]'),
+        firstReview.closest('.m6QErb'),
+        firstReview.parentElement?.parentElement,
+        firstReview.parentElement
+      ].filter(Boolean);
+      
+      for (const container of containers) {
+        if (container && container.querySelectorAll('[data-review-id], .jftiEf').length > 0) {
+          console.log('✅ Found reviews container via traversal');
+          return container;
+        }
+      }
     }
     
+    console.log('❌ Could not find reviews pane');
     return null;
   };
 
@@ -613,11 +726,37 @@ async function scrapeReviewsOptimized(userConfig = {}) {
   const restaurantName = getRestaurantName();
   console.log(`🏪 Restaurant: ${restaurantName}`);
 
-  await clickReviewsTab();
+  const tabClicked = await clickReviewsTab();
+
+  // If we clicked the tab, wait a bit more for content to load
+  if (tabClicked) {
+    console.log('⏳ Waiting for reviews to load after tab click...');
+    await wait(1000);
+  }
 
   const pane = findReviewsPane();
   if (!pane) {
     console.error("Reviews pane not found");
+    
+    // Provide more specific error messages
+    let errorMessage = 'Reviews pane not found - ';
+    const reviewElements = document.querySelectorAll('[data-review-id], .jftiEf, .MyEned, .wiI7pd');
+    
+    if (reviewElements.length === 0) {
+      errorMessage += 'this place might not have any reviews yet.';
+    } else if (!tabClicked) {
+      errorMessage += 'could not find or click the Reviews tab.';
+    } else {
+      errorMessage += 'make sure you\'re on a restaurant page with reviews.';
+    }
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.runtime.sendMessage({
+        type: 'REVIEW_ERROR',
+        data: { error: errorMessage }
+      });
+    }
     return;
   }
 
