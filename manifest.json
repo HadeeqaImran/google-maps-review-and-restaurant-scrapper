@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "GMaps Restaurant Scraper Pro",
-  "version": "2.0",
+  "name": "GMaps Reviews Scraper Pro",
+  "version": "1.0",
   "description": "High-performance restaurant and review scraper for Google Maps with smart scrolling, progress tracking, and batch processing",
   "permissions": [
     "activeTab",
